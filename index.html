@@ -108,7 +108,8 @@
         const botReply = data.candidates[0].content.parts[0].text;
         appendMessage(botReply, 'bot');
       } catch (err) {
-        appendMessage("エラーが発生しました。", 'bot');
+        console.error("【デバッグ用エラー詳細】:", err); // コンソールに詳細を出す
+        appendMessage("エラーが発生したぞ。詳細はコンソールを見ろ！: " + err.message, 'bot');
       }
     }
 
