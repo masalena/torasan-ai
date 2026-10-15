@@ -105,8 +105,12 @@
           })
         });
         const data = await response.json();
-        const botReply = data.candidates[0].content.parts[0].text;
-        appendMessage(botReply, 'bot');
+        const botReply = console.log("全データ確認:", data); // これで中身が全部見える！
+        if (!data.candidates || !data.candidates[0]) {
+            appendMessage("AIから返事がなかったぞ！中身はこれだ: " + JSON.stringify(data), 'bot');
+            return;
+        }
+        const botReply = data.candidates[0].content.parts[0].text;(botReply, 'bot');
       } catch (err) {
         console.error("【デバッグ用エラー詳細】:", err); // コンソールに詳細を出す
         appendMessage("エラーが発生したぞ。詳細はコンソールを見ろ！: " + err.message, 'bot');
