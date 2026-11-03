@@ -23,9 +23,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // GitHubに保存した2つの指示文を読み込む
+    // 3つのプロンプトファイルを読み込む
     const corePrompt = readFileSync(
       new URL('../prompts/masato-core.txt', import.meta.url),
+      'utf8'
+    );
+
+    const referencePrompt = readFileSync(
+      new URL('../prompts/masato-reference.txt', import.meta.url),
       'utf8'
     );
 
@@ -37,8 +42,12 @@ export default async function handler(req, res) {
     const url =
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`;
 
+    // 基本プロンプトと重要定義・思考事例を常に読み込ませる
     const systemInstruction = {
-      parts: [{ text: corePrompt }]
+      parts: [
+        { text: corePrompt },
+        { text: referencePrompt }
+      ]
     };
 
     // Gemini APIに送信する共通処理
@@ -82,10 +91,9 @@ export default async function handler(req, res) {
         parts: [{ text: dualModePrompt }]
       };
 
-      // Dual Modeに対する初期応答を裏側で取得
+      // 初期応答は画面に表示せず、会話履歴にだけ保存
       const initialReply = await askGemini([dualMessage]);
 
-      // 初期応答は画面に表示せず、会話履歴にだけ保存
       conversation = [
         dualMessage,
         initialReply
