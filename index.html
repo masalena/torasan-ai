@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -49,11 +48,12 @@
       background: #1e1e1e;
       display: flex;
       gap: 10px;
+      flex-wrap: wrap;
     }
 
     input {
       flex: 1;
-      min-width: 0;
+      min-width: 150px;
       padding: 10px;
       border-radius: 8px;
       border: none;
@@ -68,6 +68,7 @@
       border: none;
       cursor: pointer;
       color: white;
+      font-size: 14px;
     }
 
     button:disabled {
@@ -97,11 +98,48 @@
       onclick="startVoiceInput()"
       style="background:#ff9500;"
     >マイク</button>
+
+    <button
+      id="speech-toggle"
+      onclick="toggleSpeech()"
+      style="background:#666;"
+    >音声OFF</button>
+
+    <button
+      onclick="stopSpeech()"
+      style="background:#ff3b30;"
+    >停止</button>
   </div>
 
   <script>
     let conversationHistory = [];
     let isSending = false;
+
+    // 音声読み上げは初期状態でOFF
+    let speechEnabled = false;
+
+    // 音声読み上げのON/OFF切り替え
+    function toggleSpeech() {
+      speechEnabled = !speechEnabled;
+
+      const button = document.getElementById('speech-toggle');
+
+      if (speechEnabled) {
+        button.textContent = '音声ON';
+        button.style.background = '#007aff';
+      } else {
+        button.textContent = '音声OFF';
+        button.style.background = '#666';
+
+        // OFFにしたら現在の読み上げも停止
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    // 現在の読み上げを停止
+    function stopSpeech() {
+      window.speechSynthesis.cancel();
+    }
 
     async function sendMessage() {
       if (isSending) return;
@@ -111,6 +149,9 @@
       const text = input.value.trim();
 
       if (!text) return;
+
+      // 新しい質問を送信したら前の読み上げを停止
+      window.speechSynthesis.cancel();
 
       appendMessage(text, 'user');
       input.value = '';
@@ -130,10 +171,8 @@
           })
         });
 
-        // サーバーからの返答を、まず文字列として受け取る
         const raw = await response.text();
 
-        // JSONとして読み込めるか確認する
         let data;
 
         try {
@@ -153,9 +192,13 @@
 
           conversationHistory = data.history || [];
 
-          const speech = new SpeechSynthesisUtterance(data.reply);
-          speech.lang = 'ja-JP';
-          window.speechSynthesis.speak(speech);
+          // 音声ONの場合だけ読み上げる
+          if (speechEnabled) {
+            const speech = new SpeechSynthesisUtterance(data.reply);
+            speech.lang = 'ja-JP';
+            window.speechSynthesis.speak(speech);
+          }
+
         } else {
           appendMessage('返答が得られませんでした。', 'bot');
         }
@@ -191,6 +234,13 @@
           e.results[0][0].transcript;
 
         sendMessage();
+      };
+
+      rec.onerror = (e) => {
+        appendMessage(
+          '音声入力エラー: ' + e.error,
+          'bot'
+        );
       };
 
       rec.start();
