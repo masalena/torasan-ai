@@ -86,6 +86,7 @@
       id="user-input"
       placeholder="メッセージを入力..."
     >
+
     <button
       id="send-button"
       onclick="sendMessage()"
@@ -99,8 +100,6 @@
   </div>
 
   <script>
-    // 会話履歴を保持する
-    // ページを再読み込みすると新しい会話として開始する
     let conversationHistory = [];
     let isSending = false;
 
@@ -131,7 +130,19 @@
           })
         });
 
-        const data = await response.json();
+        // サーバーからの返答を、まず文字列として受け取る
+        const raw = await response.text();
+
+        // JSONとして読み込めるか確認する
+        let data;
+
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          throw new Error(
+            `サーバー応答エラー (${response.status}): ${raw.slice(0, 500)}`
+          );
+        }
 
         if (!response.ok) {
           throw new Error(data.error || '通信に失敗しました。');
@@ -140,7 +151,6 @@
         if (data.reply) {
           appendMessage(data.reply, 'bot');
 
-          // 次の質問に備えて会話履歴を更新
           conversationHistory = data.history || [];
 
           const speech = new SpeechSynthesisUtterance(data.reply);
@@ -197,7 +207,6 @@
       box.scrollTop = box.scrollHeight;
     }
 
-    // Enterキーでも送信できるようにする
     document.getElementById('user-input')
       .addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
