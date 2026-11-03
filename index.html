@@ -1,74 +1,209 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>マサトAI</title>
   <style>
-    body { background-color: #121212; color: #ffffff; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-    #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
-    .message { max-width: 80%; padding: 12px; border-radius: 12px; font-size: 1.3rem; }
-    .user { align-self: flex-end; background-color: #007aff; }
-    .bot { align-self: flex-start; background-color: #2c2c2e; }
-    #input-area { padding: 15px; background: #1e1e1e; display: flex; gap: 10px; }
-    input { flex: 1; padding: 10px; border-radius: 8px; border: none; background: #222; color: #fff; }
-    button { padding: 10px 15px; border-radius: 8px; border: none; cursor: pointer; color: white; }
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: sans-serif;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #chat-box {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 12px;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .user {
+      align-self: flex-end;
+      background-color: #007aff;
+    }
+
+    .bot {
+      align-self: flex-start;
+      background-color: #2c2c2e;
+    }
+
+    #input-area {
+      padding: 15px;
+      background: #1e1e1e;
+      display: flex;
+      gap: 10px;
+    }
+
+    input {
+      flex: 1;
+      min-width: 0;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      background: #222;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 10px 15px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      color: white;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
   </style>
 </head>
+
 <body>
   <div id="chat-box"></div>
+
   <div id="input-area">
-    <input type="text" id="user-input" placeholder="メッセージを入力...">
-    <button onclick="sendMessage()" style="background:#34c759;">送信</button>
-    <button onclick="startVoiceInput()" style="background:#ff9500;">マイク</button>
+    <input
+      type="text"
+      id="user-input"
+      placeholder="メッセージを入力..."
+    >
+    <button
+      id="send-button"
+      onclick="sendMessage()"
+      style="background:#34c759;"
+    >送信</button>
+
+    <button
+      onclick="startVoiceInput()"
+      style="background:#ff9500;"
+    >マイク</button>
   </div>
 
   <script>
+    // 会話履歴を保持する
+    // ページを再読み込みすると新しい会話として開始する
+    let conversationHistory = [];
+    let isSending = false;
+
     async function sendMessage() {
+      if (isSending) return;
+
       const input = document.getElementById('user-input');
+      const sendButton = document.getElementById('send-button');
       const text = input.value.trim();
+
       if (!text) return;
+
       appendMessage(text, 'user');
       input.value = '';
+
+      isSending = true;
+      sendButton.disabled = true;
+
       try {
-        // Vercelのサーバー（/api/chat）経由で通信するため、APIキーは不要になります
         const response = await fetch('/api/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text })
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: text,
+            history: conversationHistory
+          })
         });
+
         const data = await response.json();
-        
-        if (data.reply) {
-            const botReply = data.reply;
-            appendMessage(botReply, 'bot');
-            const speech = new SpeechSynthesisUtterance(botReply);
-            speech.lang = 'jp-JP';
-            window.speechSynthesis.speak(speech);
-        } else {
-            appendMessage("エラー: " + (data.error || JSON.stringify(data)), 'bot');
+
+        if (!response.ok) {
+          throw new Error(data.error || '通信に失敗しました。');
         }
+
+        if (data.reply) {
+          appendMessage(data.reply, 'bot');
+
+          // 次の質問に備えて会話履歴を更新
+          conversationHistory = data.history || [];
+
+          const speech = new SpeechSynthesisUtterance(data.reply);
+          speech.lang = 'ja-JP';
+          window.speechSynthesis.speak(speech);
+        } else {
+          appendMessage('返答が得られませんでした。', 'bot');
+        }
+
       } catch (err) {
-        appendMessage("通信エラー: " + err.message, 'bot');
+        appendMessage('エラー: ' + err.message, 'bot');
+
+      } finally {
+        isSending = false;
+        sendButton.disabled = false;
+        input.focus();
       }
     }
 
     function startVoiceInput() {
-      const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      const Recognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
+
+      if (!Recognition) {
+        appendMessage(
+          'このブラウザでは音声入力を利用できません。',
+          'bot'
+        );
+        return;
+      }
+
+      const rec = new Recognition();
       rec.lang = 'ja-JP';
+
       rec.onresult = (e) => {
-        document.getElementById('user-input').value = e.results[0][0].transcript;
+        document.getElementById('user-input').value =
+          e.results[0][0].transcript;
+
         sendMessage();
       };
+
       rec.start();
     }
 
     function appendMessage(text, sender) {
       const box = document.getElementById('chat-box');
       const msg = document.createElement('div');
+
       msg.className = `message ${sender}`;
       msg.textContent = text;
+
       box.appendChild(msg);
+      box.scrollTop = box.scrollHeight;
     }
+
+    // Enterキーでも送信できるようにする
+    document.getElementById('user-input')
+      .addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          sendMessage();
+        }
+      });
   </script>
 </body>
 </html>
