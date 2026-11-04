@@ -1,22 +1,140 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>マサトAI</title>
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      background-color: #121212;
-      color: #ffffff;
+      background: #121212;
+      color: #fff;
       font-family: sans-serif;
       margin: 0;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      height: 100vh;
+    }
+
+    button {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    input {
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: #252525;
+      color: white;
+      font-size: 16px;
+      min-width: 0;
+    }
+
+    #login-screen {
+      width: min(420px, calc(100% - 32px));
+      margin: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #login-screen h2 {
+      text-align: center;
+    }
+
+    #login-screen button {
+      width: 100%;
+    }
+
+    #auth-status {
+      min-height: 24px;
+      color: #ccc;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    #app {
+      display: none;
+      flex: 1;
+      min-height: 0;
+    }
+
+    #sidebar {
+      width: 260px;
+      background: #1b1b1b;
+      border-right: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    #sidebar h3 {
+      margin: 4px 0;
+    }
+
+    #conversation-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .conversation-item {
+      width: 100%;
+      text-align: left;
+      background: #292929;
+      overflow-wrap: anywhere;
+    }
+
+    .conversation-item.selected {
+      background: #0759a8;
+    }
+
+    #main-area {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #top-bar {
+      min-height: 48px;
+      padding: 8px 14px;
+      background: #1e1e1e;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    #current-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     #chat-box {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 20px;
       display: flex;
@@ -28,129 +146,600 @@
       max-width: 80%;
       padding: 12px;
       border-radius: 12px;
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
+      line-height: 1.6;
     }
 
     .user {
       align-self: flex-end;
-      background-color: #007aff;
+      background: #007aff;
     }
 
     .bot {
       align-self: flex-start;
-      background-color: #2c2c2e;
+      background: #2c2c2e;
     }
 
     #input-area {
-      padding: 15px;
+      padding: 12px;
       background: #1e1e1e;
       display: flex;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
     }
 
-    input {
+    #user-input {
       flex: 1;
-      min-width: 150px;
-      padding: 10px;
-      border-radius: 8px;
-      border: none;
-      background: #222;
-      color: #fff;
-      font-size: 16px;
+      width: 100px;
     }
 
-    button {
-      padding: 10px 15px;
-      border-radius: 8px;
-      border: none;
-      cursor: pointer;
-      color: white;
-      font-size: 14px;
+    #speech-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      padding: 0 12px 12px;
+      background: #1e1e1e;
     }
 
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+    #app-status {
+      padding: 4px 12px;
+      background: #1e1e1e;
+      color: #aaa;
+      font-size: 12px;
+      min-height: 20px;
+    }
+
+    @media (max-width: 650px) {
+      #sidebar {
+        width: 125px;
+        padding: 7px;
+      }
+
+      #sidebar button {
+        padding: 9px 6px;
+        font-size: 12px;
+      }
+
+      #chat-box {
+        padding: 12px;
+      }
+
+      .message {
+        max-width: 92%;
+        font-size: 1rem;
+      }
+
+      #input-area {
+        padding: 8px;
+      }
+
+      #speech-controls {
+        padding: 0 8px 8px;
+      }
+
+      #speech-controls button {
+        padding: 9px 10px;
+        font-size: 12px;
+      }
     }
   </style>
 </head>
 
 <body>
-  <div id="chat-box"></div>
 
-  <div id="input-area">
+  <!-- ログイン画面 -->
+  <div id="login-screen">
+    <h2>マサトAI</h2>
+
     <input
-      type="text"
-      id="user-input"
-      placeholder="メッセージを入力..."
+      type="email"
+      id="email"
+      placeholder="メールアドレス"
+      autocomplete="email"
+    >
+
+    <input
+      type="password"
+      id="password"
+      placeholder="パスワード"
+      autocomplete="current-password"
     >
 
     <button
-      id="send-button"
-      onclick="sendMessage()"
-      style="background:#34c759;"
-    >送信</button>
+      onclick="login()"
+      style="background:#007aff;"
+    >ログイン</button>
 
     <button
-      onclick="startVoiceInput()"
-      style="background:#ff9500;"
-    >マイク</button>
+      onclick="signup()"
+      style="background:#34a853;"
+    >新規登録</button>
 
-    <button
-      id="speech-toggle"
-      onclick="toggleSpeech()"
-      style="background:#666;"
-    >音声OFF</button>
-
-    <button
-      onclick="stopSpeech()"
-      style="background:#ff3b30;"
-    >停止</button>
+    <div id="auth-status"></div>
   </div>
 
+
+  <!-- ログイン後のアプリ画面 -->
+  <div id="app">
+
+    <aside id="sidebar">
+      <h3>会話履歴</h3>
+
+      <button
+        onclick="newConversation()"
+        style="background:#34a853;"
+      >＋ 新しい会話</button>
+
+      <div id="conversation-list"></div>
+
+      <button
+        onclick="logout()"
+        style="background:#555;"
+      >ログアウト</button>
+    </aside>
+
+
+    <main id="main-area">
+
+      <div id="top-bar">
+        <strong id="current-title">新しい会話</strong>
+      </div>
+
+      <div id="chat-box"></div>
+
+      <div id="input-area">
+        <input
+          type="text"
+          id="user-input"
+          placeholder="メッセージを入力..."
+        >
+
+        <button
+          id="send-button"
+          onclick="sendMessage()"
+          style="background:#34c759;"
+        >送信</button>
+
+        <button
+          onclick="startVoiceInput()"
+          style="background:#ff9500;"
+        >マイク</button>
+      </div>
+
+      <div id="speech-controls">
+
+        <button
+          id="speech-toggle"
+          onclick="toggleSpeech()"
+          style="background:#666;"
+        >音声OFF</button>
+
+        <button
+          onclick="playSpeech()"
+          style="background:#007aff;"
+        >再生</button>
+
+        <button
+          onclick="pauseSpeech()"
+          style="background:#ff9500;"
+        >一時停止</button>
+
+        <button
+          onclick="resumeSpeech()"
+          style="background:#34a853;"
+        >再開</button>
+
+        <button
+          onclick="stopSpeech()"
+          style="background:#ff3b30;"
+        >停止</button>
+
+      </div>
+
+      <div id="app-status"></div>
+
+    </main>
+  </div>
+
+
   <script>
-    let conversationHistory = [];
+    let config = null;
+    let session = null;
+    let currentConversationId = null;
     let isSending = false;
 
-    // 音声読み上げは初期状態でOFF
+    // 音声読み上げ
     let speechEnabled = false;
+    let lastSpeechText = '';
 
-    // 音声読み上げのON/OFF切り替え
-    function toggleSpeech() {
-      speechEnabled = !speechEnabled;
+    const SESSION_KEY = 'masato_ai_session';
 
-      const button = document.getElementById('speech-toggle');
 
-      if (speechEnabled) {
-        button.textContent = '音声ON';
-        button.style.background = '#007aff';
-      } else {
-        button.textContent = '音声OFF';
-        button.style.background = '#666';
+    // -------------------------
+    // 共通処理
+    // -------------------------
 
-        // OFFにしたら現在の読み上げも停止
-        window.speechSynthesis.cancel();
+    async function readJson(response) {
+      const raw = await response.text();
+
+      try {
+        return raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error('サーバーからの応答を読み取れませんでした。');
       }
     }
 
-    // 現在の読み上げを停止
-    function stopSpeech() {
-      window.speechSynthesis.cancel();
+    function setAuthStatus(message) {
+      document.getElementById('auth-status').textContent = message;
     }
+
+    function setAppStatus(message) {
+      document.getElementById('app-status').textContent = message;
+    }
+
+    function saveSession(data) {
+      session = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Date.now() + (data.expires_in || 3600) * 1000
+      };
+
+      localStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify(session)
+      );
+    }
+
+    function clearSession() {
+      session = null;
+      localStorage.removeItem(SESSION_KEY);
+    }
+
+
+    // -------------------------
+    // Supabaseの設定取得
+    // -------------------------
+
+    async function loadConfig() {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'config'
+        })
+      });
+
+      const data = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(data.error || '設定を読み込めませんでした。');
+      }
+
+      config = data;
+    }
+
+
+    // -------------------------
+    // Supabase認証
+    // -------------------------
+
+    async function authRequest(path, body) {
+      const response = await fetch(
+        `${config.supabaseUrl}/auth/v1/${path}`,
+        {
+          method: 'POST',
+          headers: {
+            apikey: config.supabaseKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        }
+      );
+
+      const data = await readJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          data.msg ||
+          data.message ||
+          data.error_description ||
+          data.error ||
+          '認証に失敗しました。'
+        );
+      }
+
+      return data;
+    }
+
+    async function signup() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) {
+        setAuthStatus('メールアドレスとパスワードを入力してください。');
+        return;
+      }
+
+      try {
+        setAuthStatus('登録しています...');
+
+        const data = await authRequest('signup', {
+          email,
+          password
+        });
+
+        if (data.access_token) {
+          saveSession(data);
+          await enterApp();
+        } else {
+          setAuthStatus(
+            '登録メールを送信しました。メールを確認して認証を完了したあと、ログインしてください。'
+          );
+        }
+
+      } catch (error) {
+        setAuthStatus('登録エラー: ' + error.message);
+      }
+    }
+
+    async function login() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) {
+        setAuthStatus('メールアドレスとパスワードを入力してください。');
+        return;
+      }
+
+      try {
+        setAuthStatus('ログインしています...');
+
+        const data = await authRequest(
+          'token?grant_type=password',
+          { email, password }
+        );
+
+        saveSession(data);
+        await enterApp();
+
+      } catch (error) {
+        setAuthStatus('ログインエラー: ' + error.message);
+      }
+    }
+
+    async function refreshSession() {
+      if (!session?.refresh_token) {
+        return false;
+      }
+
+      try {
+        const data = await authRequest(
+          'token?grant_type=refresh_token',
+          {
+            refresh_token: session.refresh_token
+          }
+        );
+
+        saveSession(data);
+        return true;
+
+      } catch {
+        clearSession();
+        return false;
+      }
+    }
+
+    async function logout() {
+      clearSession();
+
+      currentConversationId = null;
+      conversationHistory = [];
+
+      window.speechSynthesis.cancel();
+
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+
+      setAuthStatus('ログアウトしました。');
+    }
+
+
+    // -------------------------
+    // API通信
+    // -------------------------
+
+    async function apiRequest(payload, retry = true) {
+      if (!session?.access_token) {
+        throw new Error('ログインしてください。');
+      }
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await readJson(response);
+
+      if (response.status === 401 && retry) {
+        const refreshed = await refreshSession();
+
+        if (refreshed) {
+          return apiRequest(payload, false);
+        }
+
+        throw new Error('ログインの有効期限が切れました。再ログインしてください。');
+      }
+
+      if (!response.ok) {
+        throw new Error(data.error || '通信に失敗しました。');
+      }
+
+      return data;
+    }
+
+
+    // -------------------------
+    // アプリ開始
+    // -------------------------
+
+    async function enterApp() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'flex';
+
+      await loadConversationList();
+
+      const list = await apiRequest({
+        action: 'list'
+      });
+
+      if (list.conversations.length > 0) {
+        await loadConversation(list.conversations[0].id);
+      } else {
+        await newConversation();
+      }
+    }
+
+
+    // -------------------------
+    // 会話一覧
+    // -------------------------
+
+    async function loadConversationList() {
+      const data = await apiRequest({
+        action: 'list'
+      });
+
+      const list = document.getElementById('conversation-list');
+      list.innerHTML = '';
+
+      for (const conversation of data.conversations) {
+        const button = document.createElement('button');
+
+        button.className = 'conversation-item';
+
+        if (conversation.id === currentConversationId) {
+          button.classList.add('selected');
+        }
+
+        button.textContent = conversation.title || '新しい会話';
+
+        button.onclick = () => {
+          loadConversation(conversation.id);
+        };
+
+        list.appendChild(button);
+      }
+    }
+
+
+    // -------------------------
+    // 新しい会話
+    // -------------------------
+
+    async function newConversation() {
+      try {
+        setAppStatus('新しい会話を作成しています...');
+
+        window.speechSynthesis.cancel();
+
+        const data = await apiRequest({
+          action: 'new'
+        });
+
+        currentConversationId = data.conversation.id;
+
+        document.getElementById('current-title').textContent =
+          data.conversation.title;
+
+        document.getElementById('chat-box').innerHTML = '';
+
+        await loadConversationList();
+
+        setAppStatus('新しい会話を開始できます。');
+
+        document.getElementById('user-input').focus();
+
+      } catch (error) {
+        setAppStatus('エラー: ' + error.message);
+      }
+    }
+
+
+    // -------------------------
+    // 過去の会話を読み込む
+    // -------------------------
+
+    async function loadConversation(id) {
+      try {
+        setAppStatus('会話を読み込んでいます...');
+
+        window.speechSynthesis.cancel();
+
+        const data = await apiRequest({
+          action: 'load',
+          conversationId: id
+        });
+
+        currentConversationId = id;
+
+        document.getElementById('current-title').textContent =
+          data.conversation.title || '新しい会話';
+
+        const box = document.getElementById('chat-box');
+        box.innerHTML = '';
+
+        for (const item of data.displayHistory || []) {
+          const text = (item.parts || [])
+            .filter(part => part.text)
+            .map(part => part.text)
+            .join('\n');
+
+          if (!text) continue;
+
+          if (item.role === 'user') {
+            appendMessage(text, 'user');
+          } else if (item.role === 'model') {
+            appendMessage(text, 'bot');
+          }
+        }
+
+        await loadConversationList();
+
+        setAppStatus('会話を読み込みました。');
+
+      } catch (error) {
+        setAppStatus('読み込みエラー: ' + error.message);
+      }
+    }
+
+
+    // -------------------------
+    // メッセージ送信
+    // -------------------------
 
     async function sendMessage() {
       if (isSending) return;
 
       const input = document.getElementById('user-input');
       const sendButton = document.getElementById('send-button');
+
       const text = input.value.trim();
 
       if (!text) return;
 
-      // 新しい質問を送信したら前の読み上げを停止
+      if (!currentConversationId) {
+        setAppStatus('会話を選択してください。');
+        return;
+      }
+
       window.speechSynthesis.cancel();
 
       appendMessage(text, 'user');
@@ -159,52 +748,37 @@
       isSending = true;
       sendButton.disabled = true;
 
+      setAppStatus('マサトAIが考えています...');
+
       try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            message: text,
-            history: conversationHistory
-          })
+        const data = await apiRequest({
+          action: 'chat',
+          conversationId: currentConversationId,
+          message: text
         });
-
-        const raw = await response.text();
-
-        let data;
-
-        try {
-          data = JSON.parse(raw);
-        } catch {
-          throw new Error(
-            `サーバー応答エラー (${response.status}): ${raw.slice(0, 500)}`
-          );
-        }
-
-        if (!response.ok) {
-          throw new Error(data.error || '通信に失敗しました。');
-        }
 
         if (data.reply) {
           appendMessage(data.reply, 'bot');
 
-          conversationHistory = data.history || [];
+          document.getElementById('current-title').textContent =
+            data.title || '新しい会話';
 
-          // 音声ONの場合だけ読み上げる
           if (speechEnabled) {
-            const speech = new SpeechSynthesisUtterance(data.reply);
-            speech.lang = 'ja-JP';
-            window.speechSynthesis.speak(speech);
+            speakText(data.reply);
           }
+
+          await loadConversationList();
+
+          setAppStatus('保存しました。');
 
         } else {
           appendMessage('返答が得られませんでした。', 'bot');
+          setAppStatus('返答が得られませんでした。');
         }
 
-      } catch (err) {
-        appendMessage('エラー: ' + err.message, 'bot');
+      } catch (error) {
+        appendMessage('エラー: ' + error.message, 'bot');
+        setAppStatus('エラーが発生しました。');
 
       } finally {
         isSending = false;
@@ -212,6 +786,11 @@
         input.focus();
       }
     }
+
+
+    // -------------------------
+    // 音声入力
+    // -------------------------
 
     function startVoiceInput() {
       const Recognition =
@@ -229,40 +808,177 @@
       const rec = new Recognition();
       rec.lang = 'ja-JP';
 
-      rec.onresult = (e) => {
+      rec.onresult = (event) => {
         document.getElementById('user-input').value =
-          e.results[0][0].transcript;
+          event.results[0][0].transcript;
 
         sendMessage();
       };
 
-      rec.onerror = (e) => {
-        appendMessage(
-          '音声入力エラー: ' + e.error,
-          'bot'
-        );
+      rec.onerror = (event) => {
+        setAppStatus('音声入力エラー: ' + event.error);
       };
 
       rec.start();
     }
 
-    function appendMessage(text, sender) {
-      const box = document.getElementById('chat-box');
-      const msg = document.createElement('div');
 
-      msg.className = `message ${sender}`;
-      msg.textContent = text;
+    // -------------------------
+    // 音声読み上げ
+    // -------------------------
 
-      box.appendChild(msg);
-      box.scrollTop = box.scrollHeight;
+    function updateSpeechButton() {
+      const button = document.getElementById('speech-toggle');
+
+      if (speechEnabled) {
+        button.textContent = '音声ON';
+        button.style.background = '#007aff';
+      } else {
+        button.textContent = '音声OFF';
+        button.style.background = '#666';
+      }
     }
 
+    function toggleSpeech() {
+      speechEnabled = !speechEnabled;
+
+      updateSpeechButton();
+
+      if (!speechEnabled) {
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    function speakText(text) {
+      if (!text) return;
+
+      lastSpeechText = text;
+
+      if (!speechEnabled) return;
+
+      window.speechSynthesis.cancel();
+
+      const speech = new SpeechSynthesisUtterance(text);
+      speech.lang = 'ja-JP';
+
+      window.speechSynthesis.speak(speech);
+    }
+
+    // 最後の返答を最初から再生
+    function playSpeech() {
+      if (!lastSpeechText) {
+        setAppStatus('再生する文章がありません。');
+        return;
+      }
+
+      if (!speechEnabled) {
+        speechEnabled = true;
+        updateSpeechButton();
+      }
+
+      speakText(lastSpeechText);
+    }
+
+    // 読み上げを一時停止
+    function pauseSpeech() {
+      window.speechSynthesis.pause();
+    }
+
+    // 一時停止した位置から再開
+    function resumeSpeech() {
+      if (!speechEnabled) {
+        speechEnabled = true;
+        updateSpeechButton();
+      }
+
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      } else if (lastSpeechText) {
+        playSpeech();
+      }
+    }
+
+    // 読み上げを完全停止
+    function stopSpeech() {
+      window.speechSynthesis.cancel();
+    }
+
+
+    // -------------------------
+    // 画面表示
+    // -------------------------
+
+    function appendMessage(text, sender) {
+      const box = document.getElementById('chat-box');
+      const message = document.createElement('div');
+
+      message.className = `message ${sender}`;
+      message.textContent = text;
+
+      box.appendChild(message);
+      box.scrollTop = box.scrollHeight;
+
+      // 最新のAI返答を手動再生できるようにする
+      if (sender === 'bot') {
+        lastSpeechText = text;
+      }
+    }
+
+
+    // Enterキーで送信
     document.getElementById('user-input')
       .addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           sendMessage();
         }
       });
+
+
+    // -------------------------
+    // 起動時の処理
+    // -------------------------
+
+    async function initialize() {
+      try {
+        await loadConfig();
+
+        const stored = localStorage.getItem(SESSION_KEY);
+
+        if (stored) {
+          try {
+            session = JSON.parse(stored);
+          } catch {
+            clearSession();
+          }
+        }
+
+        if (session?.refresh_token) {
+          if (session.expires_at < Date.now() + 60000) {
+            const refreshed = await refreshSession();
+
+            if (!refreshed) {
+              return;
+            }
+          }
+
+          try {
+            await enterApp();
+            return;
+          } catch {
+            clearSession();
+          }
+        }
+
+      } catch (error) {
+        setAuthStatus('初期設定エラー: ' + error.message);
+      }
+
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('app').style.display = 'none';
+    }
+
+    initialize();
   </script>
+
 </body>
 </html>
