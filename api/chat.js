@@ -19,10 +19,10 @@ function getText(content) {
     .join('\n');
 }
 
-function visibleHistory(history, dualModePrompt) {
+function visibleHistory(history, initialPrompt) {
   if (
     history?.[0]?.role === 'user' &&
-    getText(history[0]) === dualModePrompt
+    getText(history[0]) === initialPrompt
   ) {
     return history.slice(2);
   }
@@ -261,11 +261,18 @@ export default async function handler(req, res) {
         '../prompts/masato-dual-mode.txt'
       );
 
+      const referencePrompt = readPrompt(
+        '../prompts/masato-reference.txt'
+      );
+
+      const initialPrompt =
+        dualModePrompt + '\n\n' + referencePrompt;
+
       return res.status(200).json({
         conversation,
         displayHistory: visibleHistory(
           conversation.history,
-          dualModePrompt
+          initialPrompt
         )
       });
     }
@@ -316,10 +323,10 @@ export default async function handler(req, res) {
         '../prompts/masato-dual-mode.txt'
       );
 
+      // System Instructionにはコアプロンプトだけを設定
       const systemInstruction = {
         parts: [
-          { text: corePrompt },
-          { text: referencePrompt }
+          { text: corePrompt }
         ]
       };
 
@@ -361,17 +368,20 @@ export default async function handler(req, res) {
         ? conversation.history
         : [];
 
-      // 新しい会話の場合だけDual Modeを初期化
+      // 新しい会話の場合だけDual ModeとReferenceを初期化
       if (history.length === 0) {
-        const dualMessage = {
+        const initialPrompt =
+          dualModePrompt + '\n\n' + referencePrompt;
+
+        const initialMessage = {
           role: 'user',
-          parts: [{ text: dualModePrompt }]
+          parts: [{ text: initialPrompt }]
         };
 
-        const initialReply = await askGemini([dualMessage]);
+        const initialReply = await askGemini([initialMessage]);
 
         history = [
-          dualMessage,
+          initialMessage,
           initialReply
         ];
       }
@@ -404,13 +414,16 @@ export default async function handler(req, res) {
         title
       );
 
+      const initialPrompt =
+        dualModePrompt + '\n\n' + referencePrompt;
+
       return res.status(200).json({
         reply: getText(aiReply) || '返答が得られませんでした。',
         conversationId: conversation.id,
         title: saved.title,
         displayHistory: visibleHistory(
           history,
-          dualModePrompt
+          initialPrompt
         )
       });
     }
