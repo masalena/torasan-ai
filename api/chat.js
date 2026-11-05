@@ -1,5 +1,6 @@
 
 import { readFileSync } from 'node:fs';
+import { timingSafeEqual } from 'node:crypto';
 
 const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const MAX_OUTPUT_LENGTH = 1000;
@@ -47,6 +48,17 @@ async function parseResponse(response) {
       `応答を読み取れませんでした: ${raw.slice(0, 300)}`
     );
   }
+}
+
+function safeEqual(a, b) {
+  const bufferA = Buffer.from(String(a || ''));
+  const bufferB = Buffer.from(String(b || ''));
+
+  if (!bufferA.length || bufferA.length !== bufferB.length) {
+    return false;
+  }
+
+  return timingSafeEqual(bufferA, bufferB);
 }
 
 async function authenticate(req, url, key) {
@@ -525,6 +537,32 @@ export default async function handler(req, res) {
   try {
     const { token, user } = await authenticate(req, url, key);
 
+    // 内部資料の取得：ログインと内部認証コードの両方が必要
+    if (action === 'internal-info') {
+      const accessCode = process.env.MASATO_INTERNAL_ACCESS_CODE;
+
+      if (!accessCode) {
+        return res.status(500).json({
+          error: '内部認証コードが設定されていません。'
+        });
+      }
+
+      if (!safeEqual(body.accessCode, accessCode)) {
+        return res.status(403).json({
+          error: '内部認証コードが正しくありません。'
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        internalInfo: {
+          core: readPrompt('../prompts/masato-core.txt'),
+          dualMode: readPrompt('../prompts/masato-dual-mode.txt'),
+          reference: readPrompt('../prompts/masato-reference.txt')
+        }
+      });
+    }
+
     // 会話一覧
     if (action === 'list') {
       const conversations = await databaseRequest(
@@ -655,36 +693,29 @@ export default async function handler(req, res) {
       const initialPrompt =
         dualModePrompt + '\n\n' + referencePrompt;
 
-      // 既存履歴を複製し、元データを直接変更しない
       let history = Array.isArray(conversation.history)
         ? [...conversation.history]
         : [];
 
-      // Dual ModeとReferenceを通常メッセージとして初期化
-      // CoreはSystem Instructionに単独で設定する
       history = await ensureInitialContext(
         history,
         initialPrompt,
         corePrompt
       );
 
-      // 今回の質問より前の会話履歴
       const baseHistory = [...history];
 
-      // STEP 1：真人AIによる分析
       const analysis = await runMasatoAnalysis(
         corePrompt,
         baseHistory,
         message
       );
 
-      // STEP 2：独立した検察官による監査
       const audit = await runAuditor(
         message,
         analysis
       );
 
-      // STEP 3：最終統合
       let finalContent = await runFinalIntegration(
         corePrompt,
         baseHistory,
@@ -701,7 +732,6 @@ export default async function handler(req, res) {
         );
       }
 
-      // 1000文字を超えた場合だけ追加圧縮
       let compressionUsed = false;
 
       if (countCharacters(finalAnswer) > MAX_OUTPUT_LENGTH) {
@@ -723,8 +753,6 @@ export default async function handler(req, res) {
         }
       }
 
-      // 会話履歴には質問と最終回答だけを保存
-      // 内部分析と検察官の監査結果は保存しない
       history = [
         ...baseHistory,
         {
