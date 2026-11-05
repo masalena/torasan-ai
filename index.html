@@ -97,7 +97,16 @@
       gap: 6px;
     }
 
+    .conversation-row {
+      display: flex;
+      align-items: stretch;
+      gap: 4px;
+      width: 100%;
+    }
+
     .conversation-item {
+      flex: 1;
+      min-width: 0;
       width: 100%;
       text-align: left;
       background: #292929;
@@ -106,6 +115,18 @@
 
     .conversation-item.selected {
       background: #0759a8;
+    }
+
+    .conversation-delete {
+      flex: 0 0 36px;
+      padding: 8px 0;
+      background: #663333;
+      color: #fff;
+      font-size: 18px;
+    }
+
+    .conversation-delete:hover {
+      background: #a52a2a;
     }
 
     #main-area {
@@ -200,6 +221,11 @@
       #sidebar button {
         padding: 9px 6px;
         font-size: 12px;
+      }
+
+      .conversation-delete {
+        flex-basis: 30px;
+        font-size: 16px;
       }
 
       #chat-box {
@@ -621,6 +647,9 @@
       list.innerHTML = '';
 
       for (const conversation of data.conversations) {
+        const row = document.createElement('div');
+        row.className = 'conversation-row';
+
         const button = document.createElement('button');
 
         button.className = 'conversation-item';
@@ -635,7 +664,89 @@
           loadConversation(conversation.id);
         };
 
-        list.appendChild(button);
+        const deleteButton = document.createElement('button');
+
+        deleteButton.className = 'conversation-delete';
+        deleteButton.textContent = '×';
+        deleteButton.title = 'この会話を削除';
+        deleteButton.setAttribute(
+          'aria-label',
+          'この会話を削除'
+        );
+
+        deleteButton.onclick = () => {
+          deleteConversation(
+            conversation.id,
+            conversation.title || '新しい会話'
+          );
+        };
+
+        row.appendChild(button);
+        row.appendChild(deleteButton);
+
+        list.appendChild(row);
+      }
+    }
+
+
+    // -------------------------
+    // 会話削除
+    // -------------------------
+
+    async function deleteConversation(id, title) {
+      if (isSending) {
+        setAppStatus(
+          'メッセージの送信中は会話を削除できません。'
+        );
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `「${title}」を削除しますか？\n\nこの操作は取り消せません。`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setAppStatus('会話を削除しています...');
+
+        await apiRequest({
+          action: 'delete',
+          conversationId: id
+        });
+
+        // 現在開いている会話を削除した場合
+        if (id === currentConversationId) {
+          currentConversationId = null;
+
+          window.speechSynthesis.cancel();
+
+          document.getElementById('chat-box').innerHTML = '';
+          document.getElementById('current-title').textContent =
+            '新しい会話';
+
+          lastSpeechText = '';
+
+          const data = await apiRequest({
+            action: 'list'
+          });
+
+          if (data.conversations.length > 0) {
+            await loadConversation(data.conversations[0].id);
+          } else {
+            await newConversation();
+          }
+
+        } else {
+          // 別の会話を削除した場合
+          await loadConversationList();
+          setAppStatus('会話を削除しました。');
+        }
+
+      } catch (error) {
+        setAppStatus('削除エラー: ' + error.message);
       }
     }
 
