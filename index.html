@@ -212,41 +212,6 @@
       min-height: 20px;
     }
 
-    #internal-panel {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      background: rgba(0, 0, 0, 0.85);
-      padding: 20px;
-    }
-
-    #internal-content {
-      background: #1e1e1e;
-      width: min(900px, 100%);
-      height: 100%;
-      margin: auto;
-      padding: 16px;
-      border-radius: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    #internal-text {
-      flex: 1;
-      min-height: 0;
-      overflow: auto;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      background: #121212;
-      padding: 12px;
-      border-radius: 8px;
-      color: #ddd;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-
     @media (max-width: 650px) {
       #sidebar {
         width: 125px;
@@ -284,16 +249,13 @@
         padding: 9px 10px;
         font-size: 12px;
       }
-
-      #top-bar {
-        padding: 8px;
-      }
     }
   </style>
 </head>
 
 <body>
 
+  <!-- ログイン画面 -->
   <div id="login-screen">
     <h2>マサトAI</h2>
 
@@ -311,35 +273,44 @@
       autocomplete="current-password"
     >
 
-    <button onclick="login()" style="background:#007aff;">ログイン</button>
-    <button onclick="signup()" style="background:#34a853;">新規登録</button>
+    <button
+      onclick="login()"
+      style="background:#007aff;"
+    >ログイン</button>
+
+    <button
+      onclick="signup()"
+      style="background:#34a853;"
+    >新規登録</button>
 
     <div id="auth-status"></div>
   </div>
 
+
+  <!-- ログイン後のアプリ画面 -->
   <div id="app">
 
     <aside id="sidebar">
       <h3>会話履歴</h3>
 
-      <button onclick="newConversation()" style="background:#34a853;">
-        ＋ 新しい会話
-      </button>
+      <button
+        onclick="newConversation()"
+        style="background:#34a853;"
+      >＋ 新しい会話</button>
 
       <div id="conversation-list"></div>
 
-      <button onclick="logout()" style="background:#555;">
-        ログアウト
-      </button>
+      <button
+        onclick="logout()"
+        style="background:#555;"
+      >ログアウト</button>
     </aside>
+
 
     <main id="main-area">
 
       <div id="top-bar">
         <strong id="current-title">新しい会話</strong>
-        <button onclick="showInternalInfo()" style="background:#8055aa;">
-          内部情報
-        </button>
       </div>
 
       <div id="chat-box"></div>
@@ -357,19 +328,40 @@
           style="background:#34c759;"
         >送信</button>
 
-        <button onclick="startVoiceInput()" style="background:#ff9500;">
-          マイク
-        </button>
+        <button
+          onclick="startVoiceInput()"
+          style="background:#ff9500;"
+        >マイク</button>
       </div>
 
       <div id="speech-controls">
-        <button id="speech-toggle" onclick="toggleSpeech()" style="background:#666;">
-          音声OFF
-        </button>
-        <button onclick="playSpeech()" style="background:#007aff;">再生</button>
-        <button onclick="pauseSpeech()" style="background:#ff9500;">一時停止</button>
-        <button onclick="resumeSpeech()" style="background:#34a853;">再開</button>
-        <button onclick="stopSpeech()" style="background:#ff3b30;">停止</button>
+
+        <button
+          id="speech-toggle"
+          onclick="toggleSpeech()"
+          style="background:#666;"
+        >音声OFF</button>
+
+        <button
+          onclick="playSpeech()"
+          style="background:#007aff;"
+        >再生</button>
+
+        <button
+          onclick="pauseSpeech()"
+          style="background:#ff9500;"
+        >一時停止</button>
+
+        <button
+          onclick="resumeSpeech()"
+          style="background:#34a853;"
+        >再開</button>
+
+        <button
+          onclick="stopSpeech()"
+          style="background:#ff3b30;"
+        >停止</button>
+
       </div>
 
       <div id="app-status"></div>
@@ -377,17 +369,6 @@
     </main>
   </div>
 
-  <div id="internal-panel">
-    <div id="internal-content">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-        <strong>真人AI 内部資料</strong>
-        <button onclick="closeInternalInfo()" style="background:#555;">
-          閉じる
-        </button>
-      </div>
-      <pre id="internal-text"></pre>
-    </div>
-  </div>
 
   <script>
     let config = null;
@@ -395,10 +376,16 @@
     let currentConversationId = null;
     let isSending = false;
 
+    // 音声読み上げ
     let speechEnabled = false;
     let lastSpeechText = '';
 
     const SESSION_KEY = 'masato_ai_session';
+
+
+    // -------------------------
+    // 共通処理
+    // -------------------------
 
     async function readJson(response) {
       const raw = await response.text();
@@ -425,7 +412,10 @@
         expires_at: Date.now() + (data.expires_in || 3600) * 1000
       };
 
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      localStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify(session)
+      );
     }
 
     function clearSession() {
@@ -433,13 +423,20 @@
       localStorage.removeItem(SESSION_KEY);
     }
 
+
+    // -------------------------
+    // Supabaseの設定取得
+    // -------------------------
+
     async function loadConfig() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ action: 'config' })
+        body: JSON.stringify({
+          action: 'config'
+        })
       });
 
       const data = await readJson(response);
@@ -450,6 +447,11 @@
 
       config = data;
     }
+
+
+    // -------------------------
+    // Supabase認証
+    // -------------------------
 
     async function authRequest(path, body) {
       const response = await fetch(
@@ -491,7 +493,10 @@
       try {
         setAuthStatus('登録しています...');
 
-        const data = await authRequest('signup', { email, password });
+        const data = await authRequest('signup', {
+          email,
+          password
+        });
 
         if (data.access_token) {
           saveSession(data);
@@ -501,6 +506,7 @@
             '登録メールを送信しました。メールを確認して認証を完了したあと、ログインしてください。'
           );
         }
+
       } catch (error) {
         setAuthStatus('登録エラー: ' + error.message);
       }
@@ -525,6 +531,7 @@
 
         saveSession(data);
         await enterApp();
+
       } catch (error) {
         setAuthStatus('ログインエラー: ' + error.message);
       }
@@ -538,11 +545,14 @@
       try {
         const data = await authRequest(
           'token?grant_type=refresh_token',
-          { refresh_token: session.refresh_token }
+          {
+            refresh_token: session.refresh_token
+          }
         );
 
         saveSession(data);
         return true;
+
       } catch {
         clearSession();
         return false;
@@ -551,17 +561,22 @@
 
     async function logout() {
       clearSession();
+
       currentConversationId = null;
       conversationHistory = [];
 
       window.speechSynthesis.cancel();
-      closeInternalInfo();
 
       document.getElementById('app').style.display = 'none';
       document.getElementById('login-screen').style.display = 'flex';
 
       setAuthStatus('ログアウトしました。');
     }
+
+
+    // -------------------------
+    // API通信
+    // -------------------------
 
     async function apiRequest(payload, retry = true) {
       if (!session?.access_token) {
@@ -596,13 +611,20 @@
       return data;
     }
 
+
+    // -------------------------
+    // アプリ開始
+    // -------------------------
+
     async function enterApp() {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('app').style.display = 'flex';
 
       await loadConversationList();
 
-      const list = await apiRequest({ action: 'list' });
+      const list = await apiRequest({
+        action: 'list'
+      });
 
       if (list.conversations.length > 0) {
         await loadConversation(list.conversations[0].id);
@@ -611,10 +633,17 @@
       }
     }
 
-    async function loadConversationList() {
-      const data = await apiRequest({ action: 'list' });
-      const list = document.getElementById('conversation-list');
 
+    // -------------------------
+    // 会話一覧
+    // -------------------------
+
+    async function loadConversationList() {
+      const data = await apiRequest({
+        action: 'list'
+      });
+
+      const list = document.getElementById('conversation-list');
       list.innerHTML = '';
 
       for (const conversation of data.conversations) {
@@ -622,6 +651,7 @@
         row.className = 'conversation-row';
 
         const button = document.createElement('button');
+
         button.className = 'conversation-item';
 
         if (conversation.id === currentConversationId) {
@@ -629,13 +659,21 @@
         }
 
         button.textContent = conversation.title || '新しい会話';
-        button.onclick = () => loadConversation(conversation.id);
 
+        button.onclick = () => {
+          loadConversation(conversation.id);
+        };
+
+        list.appendChild(button);
         const deleteButton = document.createElement('button');
+
         deleteButton.className = 'conversation-delete';
         deleteButton.textContent = '×';
         deleteButton.title = 'この会話を削除';
-        deleteButton.setAttribute('aria-label', 'この会話を削除');
+        deleteButton.setAttribute(
+          'aria-label',
+          'この会話を削除'
+        );
 
         deleteButton.onclick = () => {
           deleteConversation(
@@ -646,13 +684,21 @@
 
         row.appendChild(button);
         row.appendChild(deleteButton);
+
         list.appendChild(row);
       }
     }
 
+
+    // -------------------------
+    // 会話削除
+    // -------------------------
+
     async function deleteConversation(id, title) {
       if (isSending) {
-        setAppStatus('メッセージの送信中は会話を削除できません。');
+        setAppStatus(
+          'メッセージの送信中は会話を削除できません。'
+        );
         return;
       }
 
@@ -660,7 +706,9 @@
         `「${title}」を削除しますか？\n\nこの操作は取り消せません。`
       );
 
-      if (!confirmed) return;
+      if (!confirmed) {
+        return;
+      }
 
       try {
         setAppStatus('会話を削除しています...');
@@ -670,37 +718,53 @@
           conversationId: id
         });
 
+        // 現在開いている会話を削除した場合
         if (id === currentConversationId) {
           currentConversationId = null;
+
           window.speechSynthesis.cancel();
 
           document.getElementById('chat-box').innerHTML = '';
-          document.getElementById('current-title').textContent = '新しい会話';
+          document.getElementById('current-title').textContent =
+            '新しい会話';
 
           lastSpeechText = '';
 
-          const data = await apiRequest({ action: 'list' });
+          const data = await apiRequest({
+            action: 'list'
+          });
 
           if (data.conversations.length > 0) {
             await loadConversation(data.conversations[0].id);
           } else {
             await newConversation();
           }
+
         } else {
+          // 別の会話を削除した場合
           await loadConversationList();
           setAppStatus('会話を削除しました。');
         }
+
       } catch (error) {
         setAppStatus('削除エラー: ' + error.message);
       }
     }
 
+
+    // -------------------------
+    // 新しい会話
+    // -------------------------
+
     async function newConversation() {
       try {
         setAppStatus('新しい会話を作成しています...');
+
         window.speechSynthesis.cancel();
 
-        const data = await apiRequest({ action: 'new' });
+        const data = await apiRequest({
+          action: 'new'
+        });
 
         currentConversationId = data.conversation.id;
 
@@ -712,15 +776,23 @@
         await loadConversationList();
 
         setAppStatus('新しい会話を開始できます。');
+
         document.getElementById('user-input').focus();
+
       } catch (error) {
         setAppStatus('エラー: ' + error.message);
       }
     }
 
+
+    // -------------------------
+    // 過去の会話を読み込む
+    // -------------------------
+
     async function loadConversation(id) {
       try {
         setAppStatus('会話を読み込んでいます...');
+
         window.speechSynthesis.cancel();
 
         const data = await apiRequest({
@@ -752,17 +824,25 @@
         }
 
         await loadConversationList();
+
         setAppStatus('会話を読み込みました。');
+
       } catch (error) {
         setAppStatus('読み込みエラー: ' + error.message);
       }
     }
+
+
+    // -------------------------
+    // メッセージ送信
+    // -------------------------
 
     async function sendMessage() {
       if (isSending) return;
 
       const input = document.getElementById('user-input');
       const sendButton = document.getElementById('send-button');
+
       const text = input.value.trim();
 
       if (!text) return;
@@ -800,14 +880,18 @@
           }
 
           await loadConversationList();
+
           setAppStatus('保存しました。');
+
         } else {
           appendMessage('返答が得られませんでした。', 'bot');
           setAppStatus('返答が得られませんでした。');
         }
+
       } catch (error) {
         appendMessage('エラー: ' + error.message, 'bot');
         setAppStatus('エラーが発生しました。');
+
       } finally {
         isSending = false;
         sendButton.disabled = false;
@@ -815,43 +899,10 @@
       }
     }
 
-    // 内部資料の表示
-    async function showInternalInfo() {
-      const accessCode = window.prompt('内部認証コードを入力してください。');
 
-      if (accessCode === null) return;
-
-      if (!accessCode.trim()) {
-        setAppStatus('認証コードを入力してください。');
-        return;
-      }
-
-      try {
-        setAppStatus('内部認証を確認しています...');
-
-        const data = await apiRequest({
-          action: 'internal-info',
-          accessCode
-        });
-
-        const info = data.internalInfo;
-
-        document.getElementById('internal-text').textContent =
-          '【masato-core.txt】\n\n' + info.core +
-          '\n\n\n【masato-dual-mode.txt】\n\n' + info.dualMode +
-          '\n\n\n【masato-reference.txt】\n\n' + info.reference;
-
-        document.getElementById('internal-panel').style.display = 'block';
-        setAppStatus('内部認証に成功しました。');
-      } catch (error) {
-        setAppStatus('内部認証エラー: ' + error.message);
-      }
-    }
-
-    function closeInternalInfo() {
-      document.getElementById('internal-panel').style.display = 'none';
-      document.getElementById('internal-text').textContent = '';
-    }
+    // -------------------------
+    // 音声入力
+    // -------------------------
 
     function startVoiceInput() {
       const Recognition =
@@ -883,6 +934,11 @@
       rec.start();
     }
 
+
+    // -------------------------
+    // 音声読み上げ
+    // -------------------------
+
     function updateSpeechButton() {
       const button = document.getElementById('speech-toggle');
 
@@ -897,6 +953,7 @@
 
     function toggleSpeech() {
       speechEnabled = !speechEnabled;
+
       updateSpeechButton();
 
       if (!speechEnabled) {
@@ -919,6 +976,7 @@
       window.speechSynthesis.speak(speech);
     }
 
+    // 最後の返答を最初から再生
     function playSpeech() {
       if (!lastSpeechText) {
         setAppStatus('再生する文章がありません。');
@@ -933,10 +991,12 @@
       speakText(lastSpeechText);
     }
 
+    // 読み上げを一時停止
     function pauseSpeech() {
       window.speechSynthesis.pause();
     }
 
+    // 一時停止した位置から再開
     function resumeSpeech() {
       if (!speechEnabled) {
         speechEnabled = true;
@@ -950,9 +1010,15 @@
       }
     }
 
+    // 読み上げを完全停止
     function stopSpeech() {
       window.speechSynthesis.cancel();
     }
+
+
+    // -------------------------
+    // 画面表示
+    // -------------------------
 
     function appendMessage(text, sender) {
       const box = document.getElementById('chat-box');
@@ -964,17 +1030,25 @@
       box.appendChild(message);
       box.scrollTop = box.scrollHeight;
 
+      // 最新のAI返答を手動再生できるようにする
       if (sender === 'bot') {
         lastSpeechText = text;
       }
     }
 
+
+    // Enterキーで送信
     document.getElementById('user-input')
       .addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
           sendMessage();
         }
       });
+
+
+    // -------------------------
+    // 起動時の処理
+    // -------------------------
 
     async function initialize() {
       try {
@@ -1006,6 +1080,7 @@
             clearSession();
           }
         }
+
       } catch (error) {
         setAuthStatus('初期設定エラー: ' + error.message);
       }
