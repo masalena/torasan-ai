@@ -174,6 +174,31 @@ async function updateConversation(
   return rows[0];
 }
 
+async function deleteConversation(id, userId, url, key, token) {
+  const rows = await databaseRequest(
+    url,
+    key,
+    `conversations?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}&select=id`,
+    token,
+    {
+      method: 'DELETE',
+      headers: {
+        Prefer: 'return=representation'
+      }
+    }
+  );
+
+  if (!rows?.length) {
+    const error = new Error(
+      '会話が見つからないか、削除する権限がありません。'
+    );
+    error.status = 404;
+    throw error;
+  }
+
+  return true;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({
@@ -240,6 +265,28 @@ export default async function handler(req, res) {
       );
 
       return res.status(200).json({ conversation });
+    }
+
+    // 会話を削除
+    if (action === 'delete') {
+      if (!body.conversationId) {
+        return res.status(400).json({
+          error: '削除する会話IDが指定されていません。'
+        });
+      }
+
+      await deleteConversation(
+        body.conversationId,
+        user.id,
+        url,
+        key,
+        token
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: '会話を削除しました。'
+      });
     }
 
     // 過去の会話を読み込む
