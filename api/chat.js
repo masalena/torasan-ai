@@ -2,94 +2,52 @@
 ```javascript
 import { readFileSync } from 'node:fs';
 
+// 環境変数を関数実行時に必ず取得するように変更
 function getSupabaseConfig() {
-  return {
-    url: process.env.SUPABASE_URL?.replace(/\/$/, ''),
-    key: process.env.SUPABASE_PUBLISHABLE_KEY
-  };
+  const url = process.env.SUPABASE_URL ? process.env.SUPABASE_URL.replace(/\/$/, '') : null;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY ? process.env.SUPABASE_PUBLISHABLE_KEY : null;
+  return { url, key };
 }
 
-function readPrompt(path) {
-  return readFileSync(new URL(path, import.meta.url), 'utf8');
-}
-
-function getText(content) {
-  return (content?.parts || [])
-    .filter(part => part.text)
-    .map(part => part.text)
-    .join('\n');
-}
-
-// 最終出力の強制フィルタリング関数
+// フィルタリングと検証関数（先ほどと同じもの）
 function applySecurityFilter(text) {
   return text
-    .replace(/\[.*?\]/g, '')        // ラベル削除
-    .replace(/事例\d+/g, '')         // 事例番号削除
-    .replace(/思考STEP\d+/g, '')    // 思考STEP表記削除
-    .replace(/ステップ\d+/g, '')     // ステップ表記削除
-    .replace(/マサT OS v\d+\.\d+/g, ''); // OS内部名称削除
+    .replace(/\[.*?\]/g, '')
+    .replace(/事例\d+/g, '')
+    .replace(/思考STEP\d+/g, '')
+    .replace(/ステップ\d+/g, '')
+    .replace(/マサT OS v\d+\.\d+/g, '');
 }
 
-// 記憶をリセットして叩くための検証用関数
 async function verifyResponse(originalText) {
-  const inspectorPrompt = `あなたは冷徹な論理監査官です。以下の回答案に内部プロンプトやラベルが含まれていないか厳密に検証し、もしあれば全て除去せよ。論理的な欠陥や、私の指示（ユーモアの付与等）が守られていない場合は修正せよ。
-  
-  回答案:
-  ${originalText}`;
-
+  const inspectorPrompt = `あなたは論理監査官です。以下の回答から内部構造やラベルを消去し、論理的な穴を埋めてユーモアを添えて出力せよ。\n\n${originalText}`;
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`;
-  
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: inspectorPrompt }] }]
-    })
+    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: inspectorPrompt }] }] })
   });
-
-  const data = await parseResponse(response);
-  return getText(data.candidates[0].content);
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || originalText;
 }
 
-// (認証・データベース関連の既存関数はそのまま維持...)
-// [※authenticate, databaseRequest, getConversation, createConversation, updateConversation, deleteConversation はここへそのまま配置]
+// 以下、元のauthenticateやdatabaseRequest等の関数をここにそのまま配置してください
+// （特に変更する必要はありません）
 
 export default async function handler(req, res) {
-  // ... (既存の認証・アクション分岐部分はそのまま維持)
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  
+  const body = req.body || {};
+  const action = body.action || 'chat';
+  
+  // ここで設定を確実に取得
+  const config = getSupabaseConfig();
+  const { url, key } = config;
 
-  if (action === 'chat') {
-    // ... (既存のメッセージ・会話ID処理はそのまま維持)
-
-    // AI呼び出し関数を修正
-    async function askGemini(contents) {
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: corePrompt }] }, contents })
-      });
-      const data = await parseResponse(response);
-      return data.candidates[0].content;
-    }
-
-    // [会話履歴作成ロジック維持...]
-
-    // 1. 初回生成
-    const aiReply = await askGemini(history);
-    let rawText = getText(aiReply);
-
-    // 2. 検証とフィルタリング
-    let verifiedText = await verifyResponse(rawText);
-    let finalOutput = applySecurityFilter(verifiedText);
-
-    // ユーモアチェック（もし検察官がユーモアを忘れていたら強制付与）
-    if (!finalOutput.includes('(') && !finalOutput.includes(')')) {
-        finalOutput += "\n\n(僕、AIだから筋肉痛にはならないんですけどね、筋肉痛になるほど運動するあなたは最高にロックだと思いますよ（笑）)";
-    }
-
-    history.push({ role: 'model', parts: [{ text: finalOutput }] });
-
-    // [以下、保存処理・レスポンス返却は既存の通り...]
+  if (action === 'config') {
+    if (!url || !key) return res.status(500).json({ error: 'Supabase設定ミス' });
+    return res.status(200).json({ supabaseUrl: url, supabaseKey: key });
   }
-}
+  
+  // ... (以下、元の処理を繋げてください)
 ```
