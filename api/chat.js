@@ -379,7 +379,7 @@ export default async function handler(req, res) {
 
       async function askGemini(contents) {
         const apiUrl =
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`;
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
 
         const response = await fetch(apiUrl, {
           method: 'POST',
