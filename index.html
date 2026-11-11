@@ -191,6 +191,20 @@
       overflow-wrap: anywhere;
     }
 
+    .message-copy-button {
+      display: block;
+      margin: 0 0 8px auto;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #555;
+      color: #fff;
+      font-size: 12px;
+    }
+
+    .message-copy-button:hover {
+      background: #777;
+    }
+
     .code-block {
       width: 100%;
       max-width: 100%;
@@ -1125,6 +1139,16 @@
       message.className = `message ${sender}`;
 
       if (sender === 'bot') {
+        const copyButton = document.createElement('button');
+        copyButton.className = 'message-copy-button';
+        copyButton.type = 'button';
+        copyButton.textContent = '回答をコピー';
+        copyButton.setAttribute('aria-label', 'AIの回答全体をコピー');
+        copyButton.addEventListener('click', () => {
+          copyCode(text, copyButton);
+        });
+
+        message.appendChild(copyButton);
         renderBotMessage(message, text);
       } else {
         message.textContent = text;
@@ -1209,7 +1233,7 @@
 
     // コードだけをコピーする（非対応環境では代替手段を使用）
     async function copyCode(codeText, button) {
-      const originalLabel = 'コピー';
+      const originalLabel = button.textContent;
 
       try {
         if (navigator.clipboard && window.isSecureContext) {
