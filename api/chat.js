@@ -388,7 +388,12 @@ export default async function handler(req, res) {
           },
           body: JSON.stringify({
             systemInstruction,
-            contents
+            contents,
+            generationConfig: {
+              thinkingConfig: {
+                thinkingLevel: "LOW"
+              }
+            }
           })
         });
 
