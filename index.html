@@ -35,7 +35,8 @@
       cursor: not-allowed;
     }
 
-    input {
+    input,
+    textarea {
       padding: 12px;
       border: none;
       border-radius: 8px;
@@ -43,6 +44,7 @@
       color: white;
       font-size: 16px;
       min-width: 0;
+      font-family: sans-serif;
     }
 
     #login-screen {
@@ -189,11 +191,17 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      align-items: flex-end;
     }
 
     #user-input {
       flex: 1;
       width: 100px;
+      min-height: 46px;
+      max-height: 160px;
+      resize: none;
+      overflow-y: auto;
+      line-height: 1.5;
     }
 
     #speech-controls {
@@ -239,6 +247,10 @@
 
       #input-area {
         padding: 8px;
+      }
+
+      #user-input {
+        max-height: 120px;
       }
 
       #speech-controls {
@@ -316,11 +328,11 @@
       <div id="chat-box"></div>
 
       <div id="input-area">
-        <input
-          type="text"
+        <textarea
           id="user-input"
+          rows="1"
           placeholder="メッセージを入力..."
-        >
+        ></textarea>
 
         <button
           id="send-button"
@@ -422,6 +434,24 @@
       session = null;
       localStorage.removeItem(SESSION_KEY);
     }
+
+
+    // -------------------------
+    // 入力欄の高さ調整
+    // -------------------------
+
+    const userInput = document.getElementById('user-input');
+
+    function resizeUserInput() {
+      userInput.style.height = 'auto';
+
+      const maxHeight = window.innerWidth <= 650 ? 120 : 160;
+
+      userInput.style.height =
+        Math.min(userInput.scrollHeight, maxHeight) + 'px';
+    }
+
+    userInput.addEventListener('input', resizeUserInput);
 
 
     // -------------------------
@@ -856,6 +886,7 @@
 
       appendMessage(text, 'user');
       input.value = '';
+      resizeUserInput();
 
       isSending = true;
       sendButton.disabled = true;
@@ -921,9 +952,10 @@
       rec.lang = 'ja-JP';
 
       rec.onresult = (event) => {
-        document.getElementById('user-input').value =
+        userInput.value =
           event.results[0][0].transcript;
 
+        resizeUserInput();
         sendMessage();
       };
 
@@ -1037,13 +1069,21 @@
     }
 
 
-    // Enterキーで送信
-    document.getElementById('user-input')
-      .addEventListener('keydown', (event) => {
-        if (event.key === 'Enter') {
-          sendMessage();
-        }
-      });
+    // -------------------------
+    // Enterで送信、Shift+Enterで改行
+    // -------------------------
+
+    userInput.addEventListener('keydown', (event) => {
+      if (
+        event.key === 'Enter' &&
+        !event.shiftKey &&
+        !event.isComposing &&
+        event.keyCode !== 229
+      ) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
 
 
     // -------------------------
