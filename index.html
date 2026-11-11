@@ -6,6 +6,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>マサトAI</title>
 
+  <!-- 数式表示（MathJax） -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      },
+      startup: {
+        typeset: false
+      }
+    };
+  </script>
+  <script
+    defer
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"
+  ></script>
+
   <style>
     * {
       box-sizing: border-box;
@@ -1157,9 +1178,26 @@
       box.appendChild(message);
       box.scrollTop = box.scrollHeight;
 
+      // AI回答内の数式を整形する（コード枠の中は対象外）
+      if (sender === 'bot') {
+        typesetMath(message);
+      }
+
       // 最新のAI返答を手動再生できるようにする
       if (sender === 'bot') {
         lastSpeechText = text;
+      }
+    }
+
+    // MathJaxの読み込み完了後に、追加された回答の数式を整形する
+    async function typesetMath(element) {
+      try {
+        if (!window.MathJax) return;
+
+        await window.MathJax.startup.promise;
+        await window.MathJax.typesetPromise([element]);
+      } catch (error) {
+        console.warn('数式の表示処理に失敗しました:', error);
       }
     }
 
