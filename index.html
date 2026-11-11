@@ -185,6 +185,72 @@
       background: #2c2c2e;
     }
 
+    /* AI回答内のコード専用表示 */
+    .message-text {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .code-block {
+      width: 100%;
+      max-width: 100%;
+      margin: 12px 0;
+      overflow: hidden;
+      border: 1px solid #d5d5d5;
+      border-radius: 9px;
+      background: #f7f7f7;
+      color: #222;
+    }
+
+    .code-block-header {
+      min-height: 36px;
+      padding: 5px 8px 5px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #e9e9e9;
+      border-bottom: 1px solid #d5d5d5;
+    }
+
+    .code-language {
+      color: #555;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .code-copy-button {
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #333;
+      color: #fff;
+      font-size: 12px;
+    }
+
+    .code-copy-button:hover {
+      background: #555;
+    }
+
+    .code-block pre {
+      max-width: 100%;
+      margin: 0;
+      padding: 14px;
+      overflow-x: auto;
+      background: #f7f7f7;
+      color: #222;
+      font-family: Consolas, Monaco, 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre;
+      tab-size: 2;
+    }
+
+    .code-block code {
+      font-family: inherit;
+      white-space: pre;
+    }
+
     #input-area {
       padding: 12px;
       background: #1e1e1e;
@@ -1057,7 +1123,12 @@
       const message = document.createElement('div');
 
       message.className = `message ${sender}`;
-      message.textContent = text;
+
+      if (sender === 'bot') {
+        renderBotMessage(message, text);
+      } else {
+        message.textContent = text;
+      }
 
       box.appendChild(message);
       box.scrollTop = box.scrollHeight;
@@ -1065,6 +1136,111 @@
       // 最新のAI返答を手動再生できるようにする
       if (sender === 'bot') {
         lastSpeechText = text;
+      }
+    }
+
+    // AI回答のコードフェンスを安全に専用枠へ変換する
+    function renderBotMessage(container, text) {
+      const codeFencePattern = /```([^\n`]*)\r?\n([\s\S]*?)```/g;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = codeFencePattern.exec(text)) !== null) {
+        const normalText = text.slice(lastIndex, match.index);
+
+        if (normalText) {
+          const textPart = document.createElement('div');
+          textPart.className = 'message-text';
+          textPart.textContent = normalText;
+          container.appendChild(textPart);
+        }
+
+        const language = match[1].trim();
+        const codeText = match[2];
+
+        const codeBlock = document.createElement('div');
+        codeBlock.className = 'code-block';
+
+        const header = document.createElement('div');
+        header.className = 'code-block-header';
+
+        const languageLabel = document.createElement('span');
+        languageLabel.className = 'code-language';
+        languageLabel.textContent = language || 'コード';
+
+        const copyButton = document.createElement('button');
+        copyButton.className = 'code-copy-button';
+        copyButton.type = 'button';
+        copyButton.textContent = 'コピー';
+        copyButton.setAttribute('aria-label', 'このコードをコピー');
+
+        const pre = document.createElement('pre');
+        const code = document.createElement('code');
+        code.textContent = codeText;
+
+        copyButton.addEventListener('click', () => {
+          copyCode(codeText, copyButton);
+        });
+
+        header.appendChild(languageLabel);
+        header.appendChild(copyButton);
+        pre.appendChild(code);
+        codeBlock.appendChild(header);
+        codeBlock.appendChild(pre);
+        container.appendChild(codeBlock);
+
+        lastIndex = codeFencePattern.lastIndex;
+      }
+
+      const remainingText = text.slice(lastIndex);
+
+      if (remainingText) {
+        const textPart = document.createElement('div');
+        textPart.className = 'message-text';
+        textPart.textContent = remainingText;
+        container.appendChild(textPart);
+      }
+
+      // コードフェンスがない回答も、通常の文章として表示する
+      if (!text) {
+        container.textContent = '';
+      }
+    }
+
+    // コードだけをコピーする（非対応環境では代替手段を使用）
+    async function copyCode(codeText, button) {
+      const originalLabel = 'コピー';
+
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(codeText);
+        } else {
+          const temporaryInput = document.createElement('textarea');
+          temporaryInput.value = codeText;
+          temporaryInput.style.position = 'fixed';
+          temporaryInput.style.left = '-9999px';
+          temporaryInput.setAttribute('readonly', '');
+          document.body.appendChild(temporaryInput);
+          temporaryInput.select();
+
+          const copied = document.execCommand('copy');
+          temporaryInput.remove();
+
+          if (!copied) {
+            throw new Error('コピーできませんでした。');
+          }
+        }
+
+        button.textContent = 'コピー済み';
+        setAppStatus('コードをコピーしました。');
+        setTimeout(() => {
+          if (button.isConnected) {
+            button.textContent = originalLabel;
+          }
+        }, 1500);
+      } catch (error) {
+        button.textContent = originalLabel;
+        setAppStatus('コピーできませんでした。コードを選択してコピーしてください。');
       }
     }
 
