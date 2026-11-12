@@ -140,6 +140,18 @@
       background: #0759a8;
     }
 
+    .conversation-rename {
+      flex: 0 0 34px;
+      padding: 8px 0;
+      background: #454545;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .conversation-rename:hover {
+      background: #666;
+    }
+
     .conversation-delete {
       flex: 0 0 36px;
       padding: 8px 0;
@@ -209,6 +221,17 @@
     /* AI回答内のコード専用表示 */
     .message-text {
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .message-metadata {
+      margin-top: 10px;
+      padding-top: 7px;
+      border-top: 1px solid rgba(255, 255, 255, 0.14);
+      color: #aaa;
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: normal;
       overflow-wrap: anywhere;
     }
 
@@ -330,6 +353,11 @@
       #sidebar button {
         padding: 9px 6px;
         font-size: 12px;
+      }
+
+      .conversation-rename {
+        flex-basis: 27px;
+        font-size: 13px;
       }
 
       .conversation-delete {
@@ -796,6 +824,23 @@
         };
 
         list.appendChild(button);
+
+        const renameButton = document.createElement('button');
+        renameButton.className = 'conversation-rename';
+        renameButton.textContent = '✎';
+        renameButton.title = 'この会話の名前を変更';
+        renameButton.setAttribute(
+          'aria-label',
+          'この会話の名前を変更'
+        );
+
+        renameButton.onclick = () => {
+          renameConversation(
+            conversation.id,
+            conversation.title || '新しい会話'
+          );
+        };
+
         const deleteButton = document.createElement('button');
 
         deleteButton.className = 'conversation-delete';
@@ -814,9 +859,57 @@
         };
 
         row.appendChild(button);
+        row.appendChild(renameButton);
         row.appendChild(deleteButton);
 
         list.appendChild(row);
+      }
+    }
+
+
+    // -------------------------
+    // 会話タイトル変更
+    // -------------------------
+
+    async function renameConversation(id, currentTitle) {
+      if (isSending) {
+        setAppStatus('メッセージの送信中は名前を変更できません。');
+        return;
+      }
+
+      const newTitle = window.prompt(
+        '新しい会話タイトルを入力してください。',
+        currentTitle
+      );
+
+      if (newTitle === null) return;
+
+      const cleanTitle = newTitle.trim();
+
+      if (!cleanTitle) {
+        setAppStatus('タイトルを入力してください。');
+        return;
+      }
+
+      try {
+        setAppStatus('会話タイトルを変更しています...');
+
+        const data = await apiRequest({
+          action: 'rename',
+          conversationId: id,
+          title: cleanTitle
+        });
+
+        if (id === currentConversationId) {
+          document.getElementById('current-title').textContent =
+            data.conversation.title;
+        }
+
+        await loadConversationList();
+        setAppStatus('会話タイトルを変更しました。');
+
+      } catch (error) {
+        setAppStatus('名前変更エラー: ' + error.message);
       }
     }
 
@@ -950,7 +1043,7 @@
           if (item.role === 'user') {
             appendMessage(text, 'user');
           } else if (item.role === 'model') {
-            appendMessage(text, 'bot');
+            appendMessage(text, 'bot', item.appMetadata || null);
           }
         }
 
@@ -1002,7 +1095,7 @@
         });
 
         if (data.reply) {
-          appendMessage(data.reply, 'bot');
+          appendMessage(data.reply, 'bot', data.metrics || null);
 
           document.getElementById('current-title').textContent =
             data.title || '新しい会話';
@@ -1153,7 +1246,7 @@
     // 画面表示
     // -------------------------
 
-    function appendMessage(text, sender) {
+    function appendMessage(text, sender, metadata = null) {
       const box = document.getElementById('chat-box');
       const message = document.createElement('div');
 
@@ -1171,6 +1264,52 @@
 
         message.appendChild(copyButton);
         renderBotMessage(message, text);
+
+        if (metadata && typeof metadata === 'object') {
+          const details = [];
+
+          if (metadata.modelId) {
+            const actualModel = metadata.modelVersion &&
+              metadata.modelVersion !== metadata.modelId
+              ? ` (${metadata.modelVersion})`
+              : '';
+            details.push(`モデル: ${metadata.modelId}${actualModel}`);
+          }
+
+          if (metadata.thinkingLevel) {
+            details.push(`思考設定: ${metadata.thinkingLevel}`);
+          }
+
+          if (Number.isFinite(metadata.elapsedMs)) {
+            details.push(
+              `API応答時間: ${(metadata.elapsedMs / 1000).toFixed(2)}秒`
+            );
+          }
+
+          const tokenLabels = [
+            ['promptTokenCount', '入力'],
+            ['candidatesTokenCount', '出力'],
+            ['thoughtsTokenCount', '思考'],
+            ['totalTokenCount', '合計']
+          ];
+
+          const tokenDetails = tokenLabels
+            .filter(([key]) => Number.isFinite(metadata[key]))
+            .map(([key, label]) =>
+              `${label} ${metadata[key].toLocaleString('ja-JP')}`
+            );
+
+          if (tokenDetails.length > 0) {
+            details.push(`トークン: ${tokenDetails.join(' / ')}`);
+          }
+
+          if (details.length > 0) {
+            const metadataElement = document.createElement('div');
+            metadataElement.className = 'message-metadata';
+            metadataElement.textContent = details.join(' ｜ ');
+            message.appendChild(metadataElement);
+          }
+        }
       } else {
         message.textContent = text;
       }
