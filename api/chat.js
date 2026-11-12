@@ -199,6 +199,44 @@ async function deleteConversation(id, userId, url, key, token) {
   return true;
 }
 
+
+async function renameConversation(id, userId, title, url, key, token) {
+  const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 80) : '';
+
+  if (!cleanTitle) {
+    const error = new Error('タイトルを入力してください。');
+    error.status = 400;
+    throw error;
+  }
+
+  const rows = await databaseRequest(
+    url,
+    key,
+    `conversations?id=eq.${encodeURIComponent(id)}&user_id=eq.${encodeURIComponent(userId)}&select=id,title`,
+    token,
+    {
+      method: 'PATCH',
+      headers: {
+        Prefer: 'return=representation'
+      },
+      body: JSON.stringify({
+        title: cleanTitle,
+        updated_at: new Date().toISOString()
+      })
+    }
+  );
+
+  if (!rows?.length) {
+    const error = new Error(
+      '会話が見つからないか、名前を変更する権限がありません。'
+    );
+    error.status = 404;
+    throw error;
+  }
+
+  return rows[0];
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({
@@ -265,6 +303,29 @@ export default async function handler(req, res) {
       );
 
       return res.status(200).json({ conversation });
+    }
+
+    // 会話タイトルを変更
+    if (action === 'rename') {
+      if (!body.conversationId) {
+        return res.status(400).json({
+          error: '名前を変更する会話IDが指定されていません。'
+        });
+      }
+
+      const conversation = await renameConversation(
+        body.conversationId,
+        user.id,
+        body.title,
+        url,
+        key,
+        token
+      );
+
+      return res.status(200).json({
+        success: true,
+        conversation
+      });
     }
 
     // 会話を削除
@@ -377,9 +438,20 @@ export default async function handler(req, res) {
         ]
       };
 
+      const MODEL_ID = 'gemini-3.8-flash';
+      const THINKING_LEVEL = 'LOW';
+
       async function askGemini(contents) {
         const apiUrl =
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+
+        // アプリ独自の記録情報(appMetadata)はGemini APIへ送らない
+        const apiContents = contents.map(item => ({
+          role: item.role,
+          parts: item.parts
+        }));
+
+        const startedAt = performance.now();
 
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -388,16 +460,17 @@ export default async function handler(req, res) {
           },
           body: JSON.stringify({
             systemInstruction,
-            contents,
+            contents: apiContents,
             generationConfig: {
               thinkingConfig: {
-                thinkingLevel: "LOW"
+                thinkingLevel: THINKING_LEVEL
               }
             }
           })
         });
 
         const data = await parseResponse(response);
+        const elapsedMs = Math.round(performance.now() - startedAt);
 
         if (!response.ok) {
           throw new Error(
@@ -413,7 +486,12 @@ export default async function handler(req, res) {
           );
         }
 
-        return candidate.content;
+        return {
+          content: candidate.content,
+          usageMetadata: data.usageMetadata || null,
+          modelVersion: data.modelVersion || null,
+          elapsedMs
+        };
       }
 
       let history = Array.isArray(conversation.history)
@@ -430,7 +508,8 @@ export default async function handler(req, res) {
           parts: [{ text: initialPrompt }]
         };
 
-        const initialReply = await askGemini([initialMessage]);
+        const initialResult = await askGemini([initialMessage]);
+        const initialReply = initialResult.content;
 
         history = [
           initialMessage,
@@ -443,7 +522,30 @@ export default async function handler(req, res) {
         parts: [{ text: message }]
       });
 
-      const aiReply = await askGemini(history);
+      const answerResult = await askGemini(history);
+      const aiReply = answerResult.content;
+
+      const usage = answerResult.usageMetadata || {};
+
+      // 回答ごとの測定値を会話履歴に保存する
+      aiReply.appMetadata = {
+        elapsedMs: answerResult.elapsedMs,
+        modelId: MODEL_ID,
+        modelVersion: answerResult.modelVersion,
+        thinkingLevel: THINKING_LEVEL,
+        promptTokenCount: Number.isFinite(usage.promptTokenCount)
+          ? usage.promptTokenCount
+          : null,
+        candidatesTokenCount: Number.isFinite(usage.candidatesTokenCount)
+          ? usage.candidatesTokenCount
+          : null,
+        thoughtsTokenCount: Number.isFinite(usage.thoughtsTokenCount)
+          ? usage.thoughtsTokenCount
+          : null,
+        totalTokenCount: Number.isFinite(usage.totalTokenCount)
+          ? usage.totalTokenCount
+          : null
+      };
 
       history.push(aiReply);
 
@@ -471,6 +573,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         reply: getText(aiReply) || '返答が得られませんでした。',
+        metrics: aiReply.appMetadata,
         conversationId: conversation.id,
         title: saved.title,
         displayHistory: visibleHistory(
