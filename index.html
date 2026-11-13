@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -245,7 +246,6 @@
       background: #2c2c2e;
     }
 
-    /* AI回答内のコード専用表示 */
     .message-text {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
@@ -480,7 +480,6 @@
     <div id="auth-status"></div>
   </div>
 
-
   <!-- ログイン後のアプリ画面 -->
   <div id="app">
 
@@ -499,7 +498,6 @@
         style="background:#555;"
       >ログアウト</button>
     </aside>
-
 
     <main id="main-area">
 
@@ -575,7 +573,6 @@
     </main>
   </div>
 
-
   <script>
     let config = null;
     let session = null;
@@ -594,10 +591,11 @@
     const SESSION_KEY = 'masato_ai_session';
     const MODEL_SETTINGS_KEY = 'masato_ai_model_settings';
 
-
     // -------------------------
     // 共通処理
-        async function readJson(response) {
+    // -------------------------
+
+    async function readJson(response) {
       const raw = await response.text();
 
       try {
@@ -633,7 +631,6 @@
       localStorage.removeItem(SESSION_KEY);
     }
 
-
     // -------------------------
     // 入力欄の高さ調整
     // -------------------------
@@ -650,7 +647,6 @@
     }
 
     userInput.addEventListener('input', resizeUserInput);
-
 
     // -------------------------
     // Supabaseの設定取得
@@ -676,7 +672,6 @@
       config = data;
       initializeModelSettings();
     }
-
 
     // -------------------------
     // モデル・思考レベル選択
@@ -800,7 +795,6 @@
         })
       );
     }
-
 
     // -------------------------
     // Supabase認証
@@ -926,7 +920,6 @@
       setAuthStatus('ログアウトしました。');
     }
 
-
     // -------------------------
     // API通信
     // -------------------------
@@ -964,7 +957,6 @@
       return data;
     }
 
-
     // -------------------------
     // アプリ開始
     // -------------------------
@@ -985,7 +977,6 @@
         await newConversation();
       }
     }
-
 
     // -------------------------
     // 会話一覧
@@ -1060,7 +1051,6 @@
       }
     }
 
-
     // -------------------------
     // 会話タイトル変更
     // -------------------------
@@ -1107,7 +1097,6 @@
       }
     }
 
-
     // -------------------------
     // 会話削除
     // -------------------------
@@ -1136,7 +1125,6 @@
           conversationId: id
         });
 
-        // 現在開いている会話を削除した場合
         if (id === currentConversationId) {
           currentConversationId = null;
 
@@ -1159,7 +1147,6 @@
           }
 
         } else {
-          // 別の会話を削除した場合
           await loadConversationList();
           setAppStatus('会話を削除しました。');
         }
@@ -1168,7 +1155,6 @@
         setAppStatus('削除エラー: ' + error.message);
       }
     }
-
 
     // -------------------------
     // 新しい会話
@@ -1194,13 +1180,12 @@
         await loadConversationList();
 
         setAppStatus('新しい会話を開始できます。');
-                document.getElementById('user-input').focus();
+        document.getElementById('user-input').focus();
 
       } catch (error) {
         setAppStatus('エラー: ' + error.message);
       }
     }
-
 
     // -------------------------
     // 過去の会話を読み込む
@@ -1248,7 +1233,6 @@
         setAppStatus('読み込みエラー: ' + error.message);
       }
     }
-
 
     // -------------------------
     // メッセージ送信
@@ -1319,7 +1303,6 @@
       }
     }
 
-
     // -------------------------
     // 音声入力
     // -------------------------
@@ -1339,13 +1322,23 @@
 
       const rec = new Recognition();
       rec.lang = 'ja-JP';
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
 
       rec.onresult = (event) => {
-        userInput.value =
-          event.results[0][0].transcript;
+        const transcript = event.results[0][0].transcript;
 
+        if (!transcript.trim()) return;
+
+        // 入力欄に文章を入れるだけ。自動送信はしない。
+        userInput.value = transcript;
         resizeUserInput();
-        sendMessage();
+        userInput.focus();
+
+        setAppStatus(
+          '音声入力が完了しました。内容を確認して送信してください。'
+        );
       };
 
       rec.onerror = (event) => {
@@ -1354,7 +1347,6 @@
 
       rec.start();
     }
-
 
     // -------------------------
     // 音声読み上げ
@@ -1397,7 +1389,6 @@
       window.speechSynthesis.speak(speech);
     }
 
-    // 最後の返答を最初から再生
     function playSpeech() {
       if (!lastSpeechText) {
         setAppStatus('再生する文章がありません。');
@@ -1412,12 +1403,10 @@
       speakText(lastSpeechText);
     }
 
-    // 読み上げを一時停止
     function pauseSpeech() {
       window.speechSynthesis.pause();
     }
 
-    // 一時停止した位置から再開
     function resumeSpeech() {
       if (!speechEnabled) {
         speechEnabled = true;
@@ -1431,11 +1420,9 @@
       }
     }
 
-    // 読み上げを完全停止
     function stopSpeech() {
       window.speechSynthesis.cancel();
     }
-
 
     // -------------------------
     // 画面表示
@@ -1512,18 +1499,15 @@
       box.appendChild(message);
       box.scrollTop = box.scrollHeight;
 
-      // AI回答内の数式を整形する（コード枠の中は対象外）
       if (sender === 'bot') {
         typesetMath(message);
       }
 
-      // 最新のAI返答を手動再生できるようにする
       if (sender === 'bot') {
         lastSpeechText = text;
       }
     }
 
-    // MathJaxの読み込み完了後に、追加された回答の数式を整形する
     async function typesetMath(element) {
       try {
         if (!window.MathJax) return;
@@ -1597,13 +1581,12 @@
         container.appendChild(textPart);
       }
 
-      // コードフェンスがない回答も、通常の文章として表示する
       if (!text) {
         container.textContent = '';
       }
     }
 
-    // コードだけをコピーする（非対応環境では代替手段を使用）
+    // コードだけをコピーする
     async function copyCode(codeText, button) {
       const originalLabel = button.textContent;
 
@@ -1640,7 +1623,6 @@
       }
     }
 
-
     // -------------------------
     // Enterで送信、Shift+Enterで改行
     // -------------------------
@@ -1656,7 +1638,6 @@
         sendMessage();
       }
     });
-
 
     // -------------------------
     // 起動時の処理
