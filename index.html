@@ -1321,23 +1321,48 @@
       }
 
       const rec = new Recognition();
+
       rec.lang = 'ja-JP';
-      rec.continuous = false;
+
+      // 連続認識を要求する
+      rec.continuous = true;
+
+      // 確定した認識結果を受け取る
       rec.interimResults = false;
+
       rec.maxAlternatives = 1;
 
+      let addedText = '';
+
       rec.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
+        let newText = '';
 
-        if (!transcript.trim()) return;
+        for (
+          let i = event.resultIndex;
+          i < event.results.length;
+          i++
+        ) {
+          const result = event.results[i];
 
-        // 入力欄に文章を入れるだけ。自動送信はしない。
-        userInput.value = transcript;
+          if (result.isFinal) {
+            newText += result[0].transcript;
+          }
+        }
+
+        if (!newText.trim()) return;
+
+        addedText += newText;
+
+        const existingText = userInput.value.trimEnd();
+
+        userInput.value = existingText
+          ? existingText + ' ' + newText.trim()
+          : newText.trim();
+
         resizeUserInput();
-        userInput.focus();
 
         setAppStatus(
-          '音声入力が完了しました。内容を確認して送信してください。'
+          '音声を認識しています。続けて話すか、内容を確認して送信してください。'
         );
       };
 
@@ -1345,7 +1370,22 @@
         setAppStatus('音声入力エラー: ' + event.error);
       };
 
-      rec.start();
+      rec.onend = () => {
+        if (addedText) {
+          setAppStatus(
+            '音声入力が終了しました。文章は残っています。続きを入力する場合はマイクを押してください。'
+          );
+        } else {
+          setAppStatus('音声入力が終了しました。');
+        }
+      };
+
+      try {
+        rec.start();
+        setAppStatus('音声入力中です。');
+      } catch (error) {
+        setAppStatus('音声入力を開始できませんでした。');
+      }
     }
 
     // -------------------------
