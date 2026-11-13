@@ -1,10 +1,48 @@
-
 import { readFileSync } from 'node:fs';
 
 function getSupabaseConfig() {
   return {
     url: process.env.SUPABASE_URL?.replace(/\/$/, ''),
     key: process.env.SUPABASE_PUBLISHABLE_KEY
+  };
+}
+
+const MODEL_OPTIONS = [
+  {
+    id: 'gemini-3.8-flash',
+    label: 'Gemini 3.8 Flash',
+    thinkingLevels: ['LOW', 'MEDIUM', 'HIGH']
+  },
+  {
+    id: 'gemini-3.1-flash-lite',
+    label: 'Gemini 3.1 Flash-Lite',
+    thinkingLevels: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH']
+  }
+];
+
+const DEFAULT_MODEL_ID = 'gemini-3.8-flash';
+const DEFAULT_THINKING_LEVEL = 'LOW';
+
+function getModelSettings(modelId, thinkingLevel) {
+  const selectedModel =
+    MODEL_OPTIONS.find(model => model.id === modelId) ||
+    MODEL_OPTIONS.find(model => model.id === DEFAULT_MODEL_ID);
+
+  const requestedLevel = String(
+    thinkingLevel || DEFAULT_THINKING_LEVEL
+  ).toUpperCase();
+
+  if (!selectedModel.thinkingLevels.includes(requestedLevel)) {
+    const error = new Error(
+      `${selectedModel.label}では思考設定「${requestedLevel}」を利用できません。`
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  return {
+    modelId: selectedModel.id,
+    thinkingLevel: requestedLevel
   };
 }
 
@@ -199,7 +237,6 @@ async function deleteConversation(id, userId, url, key, token) {
   return true;
 }
 
-
 async function renameConversation(id, userId, title, url, key, token) {
   const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 80) : '';
 
@@ -248,7 +285,7 @@ export default async function handler(req, res) {
   const action = body.action || 'chat';
   const { url, key } = getSupabaseConfig();
 
-  // ブラウザに渡すSupabaseの公開情報
+  // ブラウザに渡すSupabaseの公開情報とモデル選択肢
   if (action === 'config') {
     if (!url || !key) {
       return res.status(500).json({
@@ -264,7 +301,10 @@ export default async function handler(req, res) {
       supabaseUrl: url,
       supabaseKey: key,
       supabaseUrlConfigured: true,
-      supabaseKeyConfigured: true
+      supabaseKeyConfigured: true,
+      modelOptions: MODEL_OPTIONS,
+      defaultModelId: DEFAULT_MODEL_ID,
+      defaultThinkingLevel: DEFAULT_THINKING_LEVEL
     });
   }
 
@@ -401,6 +441,12 @@ export default async function handler(req, res) {
         });
       }
 
+      // ブラウザから届いたモデル名・思考設定を許可リストで検証
+      const { modelId, thinkingLevel } = getModelSettings(
+        body.modelId,
+        body.thinkingLevel
+      );
+
       let conversation;
 
       if (body.conversationId) {
@@ -438,12 +484,9 @@ export default async function handler(req, res) {
         ]
       };
 
-      const MODEL_ID = 'gemini-3.8-flash';
-      const THINKING_LEVEL = 'LOW';
-
       async function askGemini(contents) {
         const apiUrl =
-          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${process.env.GEMINI_API_KEY}`;
 
         // アプリ独自の記録情報(appMetadata)はGemini APIへ送らない
         const apiContents = contents.map(item => ({
@@ -463,7 +506,7 @@ export default async function handler(req, res) {
             contents: apiContents,
             generationConfig: {
               thinkingConfig: {
-                thinkingLevel: THINKING_LEVEL
+                thinkingLevel: thinkingLevel.toLowerCase()
               }
             }
           })
@@ -527,12 +570,12 @@ export default async function handler(req, res) {
 
       const usage = answerResult.usageMetadata || {};
 
-      // 回答ごとの測定値を会話履歴に保存する
+      // 回答ごとの測定値と実際に使ったモデル設定を保存
       aiReply.appMetadata = {
         elapsedMs: answerResult.elapsedMs,
-        modelId: MODEL_ID,
+        modelId,
         modelVersion: answerResult.modelVersion,
-        thinkingLevel: THINKING_LEVEL,
+        thinkingLevel,
         promptTokenCount: Number.isFinite(usage.promptTokenCount)
           ? usage.promptTokenCount
           : null,
