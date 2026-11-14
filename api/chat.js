@@ -57,15 +57,31 @@ function getText(content) {
     .join('\n');
 }
 
-function visibleHistory(history, initialPrompt) {
-  if (
-    history?.[0]?.role === 'user' &&
-    getText(history[0]) === initialPrompt
-  ) {
-    return history.slice(2);
+// 画面に出さない最初の2件(追加プロトコルと、それに対するAIの返事)の判定。
+// 新しい会話では、この2件に appMetadata.hidden の印が付く。
+// 印のない古い会話は、最初のメッセージがとても長い場合(追加プロトコルと同じ)も、隠す。
+// プロンプトのファイルを直しても、文章が一致するかどうかには左右されない。
+const INITIAL_PROMPT_MIN_LENGTH = 1500;
+
+function hasInitialPair(history) {
+  const first = history?.[0];
+  const second = history?.[1];
+
+  if (first?.role !== 'user' || second?.role !== 'model') {
+    return false;
   }
 
-  return history || [];
+  if (first.appMetadata?.hidden === true) {
+    return true;
+  }
+
+  return getText(first).length >= INITIAL_PROMPT_MIN_LENGTH;
+}
+
+function visibleHistory(history) {
+  const list = Array.isArray(history) ? history : [];
+
+  return hasInitialPair(list) ? list.slice(2) : list;
 }
 
 async function parseResponse(response) {
@@ -405,23 +421,12 @@ export default async function handler(req, res) {
         token
       );
 
-      const dualModePrompt = readPrompt(
-        '../prompts/masato-dual-mode.txt'
-      );
-
-      const referencePrompt = readPrompt(
-        '../prompts/masato-reference.txt'
-      );
-
-      const initialPrompt =
-        dualModePrompt + '\n\n' + referencePrompt;
+      // 履歴の全文(追加プロトコルを含む)は、ブラウザに返さない
+      const { history: storedHistory, ...conversationInfo } = conversation;
 
       return res.status(200).json({
-        conversation,
-        displayHistory: visibleHistory(
-          conversation.history,
-          initialPrompt
-        )
+        conversation: conversationInfo,
+        displayHistory: visibleHistory(storedHistory)
       });
     }
 
@@ -546,13 +551,17 @@ export default async function handler(req, res) {
         const initialPrompt =
           dualModePrompt + '\n\n' + referencePrompt;
 
+        // hidden の印を付けて、画面には出さない
+        // (appMetadata は askGemini の中で取り除かれるので、Geminiへ届く内容は変わらない)
         const initialMessage = {
           role: 'user',
-          parts: [{ text: initialPrompt }]
+          parts: [{ text: initialPrompt }],
+          appMetadata: { hidden: true }
         };
 
         const initialResult = await askGemini([initialMessage]);
         const initialReply = initialResult.content;
+        initialReply.appMetadata = { hidden: true };
 
         history = [
           initialMessage,
@@ -611,18 +620,12 @@ export default async function handler(req, res) {
         title
       );
 
-      const initialPrompt =
-        dualModePrompt + '\n\n' + referencePrompt;
-
       return res.status(200).json({
         reply: getText(aiReply) || '返答が得られませんでした。',
         metrics: aiReply.appMetadata,
         conversationId: conversation.id,
         title: saved.title,
-        displayHistory: visibleHistory(
-          history,
-          initialPrompt
-        )
+        displayHistory: visibleHistory(history)
       });
     }
 
