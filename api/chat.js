@@ -86,9 +86,11 @@ function visibleHistory(history) {
 
 // ===== 画面用の整形 開始 =====
 // 画面に出す回答だけを整える。保存する履歴は変えない。
-// 見出しが3つ未満の回答(会話モードなど)は、見出しと項目名には触らない。
+// 次のどちらの形でもない回答(会話モードなど)は、見出しと項目名には触らない。
+//   A. 見出しが3つ以上ある形(●冷徹解剖…、【Step 0：…】…)
+//   B. 「・項目名：」だけの行が2つ以上あり、最後に「まとめ」「結論」の見出しがある形
 
-// 最初の見出し(●冷徹解剖、【Step 0：…】など)をこの名前にする。
+// 最初の見出し(または最初の項目名の位置)をこの名前にする。
 // 途中の見出しは消し(中身は1つにまとまる)、最後の見出しは FINAL_HEADING にする。
 const CHECKPOINT_HEADING = '●チェックポイント';
 const FINAL_HEADING = '●まとめ';
@@ -96,11 +98,28 @@ const FINAL_HEADING = '●まとめ';
 // チェックポイントの部分で、行頭にあれば取り除く【】のタグ(見出しとは扱わない)
 const BRACKET_TAGS = ['根', '幹', '枝', '事実', '推論'];
 
+// 項目名の前に付く記号(・ • ･ · ● など)
+const BULLET_CHARS = '・･•·●○◦‣∙▪\\-*';
+const BULLET_RE = new RegExp(`^\\s*[${BULLET_CHARS}]\\s*`);
+
+// B の形で、最後の見出しとみなす言葉
+const FINAL_WORDS = /まとめ|結論/;
+
 // 「事例013」のような番号(すべての回答で、その一文を消す)
 const CASE_PATTERN = /事例\s*[0-9０-９]+/;
 
 // 「Step 3」「ステップ2」のような番号(チェックポイントの部分だけで、その一文を消す)
 const STEP_PATTERN = /(?:STEP|Step|step|ステップ)\s*[0-9０-９]+/;
+
+// 記号 + 項目名(30文字以内、句読点なし) + コロン
+const LABEL_PATTERN = new RegExp(
+  `^(\\s*[${BULLET_CHARS}]\\s*)\\*{0,2}[^：:。、，,.\\n*]{1,30}\\*{0,2}[：:]\\*{0,2}\\s*`
+);
+
+// 上の形で、コロンの後ろに何もない行(内容は次の行にある)
+const LABEL_ONLY_PATTERN = new RegExp(
+  `^\\s*[${BULLET_CHARS}]\\s*\\*{0,2}[^：:。、，,.\\n*]{1,30}\\*{0,2}[：:]\\*{0,2}\\s*$`
+);
 
 // 見出し:
 //   「●」で始まる短い1行(30文字以内、コロンや句点なし)
@@ -123,7 +142,7 @@ function dropMatchingSentences(line, pattern) {
     return line;
   }
 
-  const bulletMatch = line.match(/^\s*[・\-*●]\s*/);
+  const bulletMatch = line.match(BULLET_RE);
   const sentences = line.match(/[^。]*。|[^。]+$/g) || [line];
   let kept = sentences.filter(s => !pattern.test(s)).join('');
 
@@ -131,7 +150,7 @@ function dropMatchingSentences(line, pattern) {
     return null;
   }
 
-  if (bulletMatch && !/^\s*[・\-*●]/.test(kept)) {
+  if (bulletMatch && !BULLET_RE.test(kept)) {
     kept = bulletMatch[0] + kept.trimStart();
   }
 
@@ -153,13 +172,10 @@ function removeCaseNumbers(text) {
 }
 
 // 行頭の「項目名：」や【タグ】を取り除く。中身が残らない行は null(行ごと消す)
-const LABEL_PATTERN =
-  /^(\s*[・\-*]\s*)\*{0,2}[^：:。、，,.\n*]{1,20}\*{0,2}[：:]\*{0,2}\s*/;
-
 function stripLabel(line) {
   if (BRACKET_TAGS.length > 0) {
     const tagPattern = new RegExp(
-      `^(\\s*(?:[・\\-*]\\s*)?)【(?:${BRACKET_TAGS.join('|')})】\\s*`
+      `^(\\s*(?:[${BULLET_CHARS}]\\s*)?)【(?:${BRACKET_TAGS.join('|')})】\\s*`
     );
     const tagMatch = line.match(tagPattern);
 
@@ -179,24 +195,8 @@ function stripLabel(line) {
   return line;
 }
 
-function tidyAnswer(text) {
-  if (typeof text !== 'string' || !text) {
-    return text;
-  }
-
-  const lines = removeCaseNumbers(text).split('\n');
-  const headings = [];
-
-  lines.forEach((line, index) => {
-    if (isHeadingLine(line)) {
-      headings.push(index);
-    }
-  });
-
-  if (headings.length < 3) {
-    return lines.join('\n');
-  }
-
+// A の形: 見出しが3つ以上ある回答
+function tidyHeadedAnswer(lines, headings) {
   const first = headings[0];
   const last = headings[headings.length - 1];
   const middle = new Set(headings.slice(1, -1));
@@ -234,7 +234,7 @@ function tidyAnswer(text) {
       }
 
       const isIndented =
-        /^[\s　]+\S/.test(current) && !/^\s*[・\-*]/.test(current);
+        /^[\s　]+\S/.test(current) && !BULLET_RE.test(current);
 
       if (isIndented && (promoteIndented || current !== line)) {
         result.push('・' + current.trim());
@@ -253,6 +253,118 @@ function tidyAnswer(text) {
   });
 
   return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// B の形: 「・項目名：」だけの行が2つ以上あり、最後に「まとめ」「結論」の見出しがある回答。
+// 項目名の行を消して、内容の行を箇条書きにする。最初の項目名の位置に、チェックポイントの見出しを入れる。
+// 該当しなければ null を返す。
+function tidyLabelBlocks(lines) {
+  let finalIndex = -1;
+
+  lines.forEach((line, index) => {
+    if (isHeadingLine(line) && FINAL_WORDS.test(line)) {
+      finalIndex = index;
+    }
+  });
+
+  if (finalIndex < 0) {
+    return null;
+  }
+
+  const labelIndexes = [];
+
+  lines.forEach((line, index) => {
+    if (index < finalIndex && LABEL_ONLY_PATTERN.test(line)) {
+      labelIndexes.push(index);
+    }
+  });
+
+  if (labelIndexes.length < 2) {
+    return null;
+  }
+
+  const first = labelIndexes[0];
+  const result = [];
+  let pendingBullet = false;
+
+  lines.forEach((line, index) => {
+    if (index < first || index > finalIndex) {
+      result.push(line);
+      return;
+    }
+
+    if (index === finalIndex) {
+      result.push(FINAL_HEADING);
+      pendingBullet = false;
+      return;
+    }
+
+    if (LABEL_ONLY_PATTERN.test(line)) {
+      if (index === first) {
+        result.push(CHECKPOINT_HEADING);
+      }
+
+      pendingBullet = true;
+      return;
+    }
+
+    const cleaned = stripLabel(line);
+
+    if (cleaned === null) {
+      pendingBullet = true;
+      return;
+    }
+
+    const current = dropMatchingSentences(cleaned, STEP_PATTERN);
+
+    if (current === null) {
+      return;
+    }
+
+    if (!current.trim()) {
+      result.push(current);
+      return;
+    }
+
+    if (BULLET_RE.test(current)) {
+      pendingBullet = false;
+      result.push(current);
+      return;
+    }
+
+    if (pendingBullet) {
+      pendingBullet = false;
+      result.push('・' + current.trim());
+      return;
+    }
+
+    result.push(current);
+  });
+
+  return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function tidyAnswer(text) {
+  if (typeof text !== 'string' || !text) {
+    return text;
+  }
+
+  const lines = removeCaseNumbers(text).split('\n');
+  const headings = [];
+
+  lines.forEach((line, index) => {
+    if (isHeadingLine(line)) {
+      headings.push(index);
+    }
+  });
+
+  if (headings.length >= 3) {
+    return tidyHeadedAnswer(lines, headings);
+  }
+
+  const labelBlocks = tidyLabelBlocks(lines);
+
+  return labelBlocks !== null ? labelBlocks : lines.join('\n');
 }
 
 // 画面に返す履歴(AIの回答だけ整える。保存されている履歴は変わらない)
