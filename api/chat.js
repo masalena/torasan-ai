@@ -88,43 +88,65 @@ function visibleHistory(history) {
 // 画面に出す回答だけを整える。保存する履歴は変えない。
 // 見出しが3つ未満の回答(会話モードなど)は、見出しと項目名には触らない。
 
-// 1つ目の見出し(●冷徹解剖など)をこの名前にして、2つ目の見出しは消す。
-// 3つ目の見出し(●翻訳と統合出力など)は、FINAL_HEADING にする。
+// 最初の見出し(●冷徹解剖、【Step 0：…】など)をこの名前にする。
+// 途中の見出しは消し(中身は1つにまとまる)、最後の見出しは FINAL_HEADING にする。
 const CHECKPOINT_HEADING = '●チェックポイント';
 const FINAL_HEADING = '●まとめ';
 
-// チェックポイントの部分で、行頭にあれば取り除く【】のタグ
+// チェックポイントの部分で、行頭にあれば取り除く【】のタグ(見出しとは扱わない)
 const BRACKET_TAGS = ['根', '幹', '枝', '事実', '推論'];
 
-// 「●」で始まる短い1行(30文字以内、コロンや句点なし)を見出しとみなす
+// 「事例013」のような番号(すべての回答で、その一文を消す)
+const CASE_PATTERN = /事例\s*[0-9０-９]+/;
+
+// 「Step 3」「ステップ2」のような番号(チェックポイントの部分だけで、その一文を消す)
+const STEP_PATTERN = /(?:STEP|Step|step|ステップ)\s*[0-9０-９]+/;
+
+// 見出し:
+//   「●」で始まる短い1行(30文字以内、コロンや句点なし)
+//   または、1行まるごと【】で囲まれた短い行(BRACKET_TAGS のタグを除く)
 function isHeadingLine(line) {
-  return /^●[^：:。\n]{1,30}$/.test(line.trim());
+  const text = line.trim();
+
+  if (/^●[^：:。\n]{1,30}$/.test(text)) {
+    return true;
+  }
+
+  const bracket = text.match(/^【([^】\n]{1,40})】$/);
+
+  return Boolean(bracket) && !BRACKET_TAGS.includes(bracket[1].trim());
 }
 
-// 「事例013」のような番号を含む一文を消す
+// 1行の中から、パターンを含む一文を消す。中身が残らなければ null(行ごと消す)
+function dropMatchingSentences(line, pattern) {
+  if (!pattern.test(line)) {
+    return line;
+  }
+
+  const bulletMatch = line.match(/^\s*[・\-*●]\s*/);
+  const sentences = line.match(/[^。]*。|[^。]+$/g) || [line];
+  let kept = sentences.filter(s => !pattern.test(s)).join('');
+
+  if (!kept.trim()) {
+    return null;
+  }
+
+  if (bulletMatch && !/^\s*[・\-*●]/.test(kept)) {
+    kept = bulletMatch[0] + kept.trimStart();
+  }
+
+  return kept;
+}
+
 function removeCaseNumbers(text) {
-  const casePattern = /事例\s*[0-9０-９]+/;
   const result = [];
 
   for (const line of text.split('\n')) {
-    if (!casePattern.test(line)) {
-      result.push(line);
-      continue;
+    const kept = dropMatchingSentences(line, CASE_PATTERN);
+
+    if (kept !== null) {
+      result.push(kept);
     }
-
-    const bulletMatch = line.match(/^\s*[・\-*●]\s*/);
-    const sentences = line.match(/[^。]*。|[^。]+$/g) || [line];
-    let kept = sentences.filter(s => !casePattern.test(s)).join('');
-
-    if (!kept.trim()) {
-      continue;
-    }
-
-    if (bulletMatch && !/^\s*[・\-*●]/.test(kept)) {
-      kept = bulletMatch[0] + kept.trimStart();
-    }
-
-    result.push(kept);
   }
 
   return result.join('\n');
@@ -175,7 +197,9 @@ function tidyAnswer(text) {
     return lines.join('\n');
   }
 
-  const [first, second, third] = headings;
+  const first = headings[0];
+  const last = headings[headings.length - 1];
+  const middle = new Set(headings.slice(1, -1));
   const result = [];
   let promoteIndented = false;
 
@@ -185,16 +209,16 @@ function tidyAnswer(text) {
       return;
     }
 
-    if (index === second) {
+    if (middle.has(index)) {
       return;
     }
 
-    if (index === third) {
+    if (index === last) {
       result.push(FINAL_HEADING);
       return;
     }
 
-    if (index > first && index < third) {
+    if (index > first && index < last) {
       const cleaned = stripLabel(line);
 
       // 項目名だけの行が消えたら、その下の字下げの行は、箇条書きにそろえる
@@ -203,10 +227,17 @@ function tidyAnswer(text) {
         return;
       }
 
-      const isIndented = /^[\s　]+\S/.test(cleaned) && !/^\s*[・\-*]/.test(cleaned);
+      const current = dropMatchingSentences(cleaned, STEP_PATTERN);
 
-      if (isIndented && (promoteIndented || cleaned !== line)) {
-        result.push('・' + cleaned.trim());
+      if (current === null) {
+        return;
+      }
+
+      const isIndented =
+        /^[\s　]+\S/.test(current) && !/^\s*[・\-*]/.test(current);
+
+      if (isIndented && (promoteIndented || current !== line)) {
+        result.push('・' + current.trim());
         return;
       }
 
@@ -214,7 +245,7 @@ function tidyAnswer(text) {
         promoteIndented = false;
       }
 
-      result.push(cleaned);
+      result.push(current);
       return;
     }
 
