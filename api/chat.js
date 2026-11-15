@@ -88,7 +88,8 @@ function visibleHistory(history) {
 // 画面に出す回答だけを整える。保存する履歴は変えない。
 // 次のどちらの形でもない回答(会話モードなど)は、見出しと項目名には触らない。
 //   A. 見出しが3つ以上ある形(●冷徹解剖…、【Step 0：…】…)
-//   B. 「・項目名：」だけの行が2つ以上あり、最後に「まとめ」「結論」の見出しがある形
+//   B. 「・項目名：」だけの行が2つ以上ある形(最後に「まとめ」「結論」の見出しがあるか、
+//      項目名らしい言葉(LABEL_HINTS)を含む場合)
 
 // 最初の見出し(または最初の項目名の位置)をこの名前にする。
 // 途中の見出しは消し(中身は1つにまとまる)、最後の見出しは FINAL_HEADING にする。
@@ -104,6 +105,11 @@ const BULLET_RE = new RegExp(`^\\s*[${BULLET_CHARS}]\\s*`);
 
 // B の形で、最後の見出しとみなす言葉
 const FINAL_WORDS = /まとめ|結論/;
+
+// B の形で、最後に見出しがない回答は、項目名にこれらの言葉が含まれるときだけ対象にする
+// (普通の回答の「・メリット：」などを巻き込まないため)。足りない言葉があれば、ここに足す。
+const LABEL_HINTS =
+  /急所|利益|置換|すり替え|捏造|射程|事実と推論|現状|弱さ|恐怖|引き受け|形から入る|プライド|承認/;
 
 // 「事例013」のような番号(すべての回答で、その一文を消す)
 const CASE_PATTERN = /事例\s*[0-9０-９]+/;
@@ -255,8 +261,9 @@ function tidyHeadedAnswer(lines, headings) {
   return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-// B の形: 「・項目名：」だけの行が2つ以上あり、最後に「まとめ」「結論」の見出しがある回答。
+// B の形: 「・項目名：」だけの行が2つ以上ある回答。
 // 項目名の行を消して、内容の行を箇条書きにする。最初の項目名の位置に、チェックポイントの見出しを入れる。
+// 最後に「まとめ」「結論」の見出しがあれば FINAL_HEADING にし、なければ、項目の部分が終わったあとの文章の前に入れる。
 // 該当しなければ null を返す。
 function tidyLabelBlocks(lines) {
   let finalIndex = -1;
@@ -267,14 +274,11 @@ function tidyLabelBlocks(lines) {
     }
   });
 
-  if (finalIndex < 0) {
-    return null;
-  }
-
+  const limit = finalIndex >= 0 ? finalIndex : lines.length;
   const labelIndexes = [];
 
   lines.forEach((line, index) => {
-    if (index < finalIndex && LABEL_ONLY_PATTERN.test(line)) {
+    if (index < limit && LABEL_ONLY_PATTERN.test(line)) {
       labelIndexes.push(index);
     }
   });
@@ -283,19 +287,57 @@ function tidyLabelBlocks(lines) {
     return null;
   }
 
+  // 最後の見出しがない回答は、項目名らしい言葉を含むときだけ対象にする
+  if (
+    finalIndex < 0 &&
+    !labelIndexes.some(index => LABEL_HINTS.test(lines[index]))
+  ) {
+    return null;
+  }
+
   const first = labelIndexes[0];
+  let regionEnd = finalIndex;
+  let headingAt = finalIndex;
+
+  if (finalIndex < 0) {
+    // 最後の項目名の内容(次の空行まで)が、項目の部分の終わり
+    regionEnd = labelIndexes[labelIndexes.length - 1] + 1;
+
+    while (regionEnd < lines.length && lines[regionEnd].trim() !== '') {
+      regionEnd += 1;
+    }
+
+    headingAt = regionEnd;
+
+    while (headingAt < lines.length && lines[headingAt].trim() === '') {
+      headingAt += 1;
+    }
+
+    if (headingAt >= lines.length) {
+      headingAt = -1;
+    }
+  }
+
   const result = [];
   let pendingBullet = false;
 
   lines.forEach((line, index) => {
-    if (index < first || index > finalIndex) {
+    if (index < first) {
       result.push(line);
       return;
     }
 
-    if (index === finalIndex) {
-      result.push(FINAL_HEADING);
-      pendingBullet = false;
+    if (index >= regionEnd) {
+      if (index === finalIndex) {
+        result.push(FINAL_HEADING);
+        return;
+      }
+
+      if (index === headingAt) {
+        result.push(FINAL_HEADING);
+      }
+
+      result.push(line);
       return;
     }
 
