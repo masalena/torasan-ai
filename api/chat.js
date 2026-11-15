@@ -84,6 +84,165 @@ function visibleHistory(history) {
   return hasInitialPair(list) ? list.slice(2) : list;
 }
 
+// ===== 画面用の整形 開始 =====
+// 画面に出す回答だけを整える。保存する履歴は変えない。
+// 見出しが3つ未満の回答(会話モードなど)は、見出しと項目名には触らない。
+
+// 1つ目の見出し(●冷徹解剖など)をこの名前にして、2つ目の見出しは消す。
+// 3つ目の見出し(●翻訳と統合出力など)は、FINAL_HEADING にする。
+const CHECKPOINT_HEADING = '●チェックポイント';
+const FINAL_HEADING = '●まとめ';
+
+// チェックポイントの部分で、行頭にあれば取り除く【】のタグ
+const BRACKET_TAGS = ['根', '幹', '枝', '事実', '推論'];
+
+// 「●」で始まる短い1行(30文字以内、コロンや句点なし)を見出しとみなす
+function isHeadingLine(line) {
+  return /^●[^：:。\n]{1,30}$/.test(line.trim());
+}
+
+// 「事例013」のような番号を含む一文を消す
+function removeCaseNumbers(text) {
+  const casePattern = /事例\s*[0-9０-９]+/;
+  const result = [];
+
+  for (const line of text.split('\n')) {
+    if (!casePattern.test(line)) {
+      result.push(line);
+      continue;
+    }
+
+    const bulletMatch = line.match(/^\s*[・\-*●]\s*/);
+    const sentences = line.match(/[^。]*。|[^。]+$/g) || [line];
+    let kept = sentences.filter(s => !casePattern.test(s)).join('');
+
+    if (!kept.trim()) {
+      continue;
+    }
+
+    if (bulletMatch && !/^\s*[・\-*●]/.test(kept)) {
+      kept = bulletMatch[0] + kept.trimStart();
+    }
+
+    result.push(kept);
+  }
+
+  return result.join('\n');
+}
+
+// 行頭の「項目名：」や【タグ】を取り除く。中身が残らない行は null(行ごと消す)
+const LABEL_PATTERN =
+  /^(\s*[・\-*]\s*)\*{0,2}[^：:。、，,.\n*]{1,20}\*{0,2}[：:]\*{0,2}\s*/;
+
+function stripLabel(line) {
+  if (BRACKET_TAGS.length > 0) {
+    const tagPattern = new RegExp(
+      `^(\\s*(?:[・\\-*]\\s*)?)【(?:${BRACKET_TAGS.join('|')})】\\s*`
+    );
+    const tagMatch = line.match(tagPattern);
+
+    if (tagMatch) {
+      const rest = line.slice(tagMatch[0].length);
+      return rest.trim() ? tagMatch[1] + rest : null;
+    }
+  }
+
+  const labelMatch = line.match(LABEL_PATTERN);
+
+  if (labelMatch) {
+    const rest = line.slice(labelMatch[0].length);
+    return rest.trim() ? labelMatch[1] + rest : null;
+  }
+
+  return line;
+}
+
+function tidyAnswer(text) {
+  if (typeof text !== 'string' || !text) {
+    return text;
+  }
+
+  const lines = removeCaseNumbers(text).split('\n');
+  const headings = [];
+
+  lines.forEach((line, index) => {
+    if (isHeadingLine(line)) {
+      headings.push(index);
+    }
+  });
+
+  if (headings.length < 3) {
+    return lines.join('\n');
+  }
+
+  const [first, second, third] = headings;
+  const result = [];
+  let promoteIndented = false;
+
+  lines.forEach((line, index) => {
+    if (index === first) {
+      result.push(CHECKPOINT_HEADING);
+      return;
+    }
+
+    if (index === second) {
+      return;
+    }
+
+    if (index === third) {
+      result.push(FINAL_HEADING);
+      return;
+    }
+
+    if (index > first && index < third) {
+      const cleaned = stripLabel(line);
+
+      // 項目名だけの行が消えたら、その下の字下げの行は、箇条書きにそろえる
+      if (cleaned === null) {
+        promoteIndented = true;
+        return;
+      }
+
+      const isIndented = /^[\s　]+\S/.test(cleaned) && !/^\s*[・\-*]/.test(cleaned);
+
+      if (isIndented && (promoteIndented || cleaned !== line)) {
+        result.push('・' + cleaned.trim());
+        return;
+      }
+
+      if (!isIndented) {
+        promoteIndented = false;
+      }
+
+      result.push(cleaned);
+      return;
+    }
+
+    result.push(line);
+  });
+
+  return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// 画面に返す履歴(AIの回答だけ整える。保存されている履歴は変わらない)
+function toDisplayHistory(history) {
+  return visibleHistory(history).map(item => {
+    if (item?.role !== 'model') {
+      return item;
+    }
+
+    return {
+      ...item,
+      parts: (item.parts || []).map(part =>
+        typeof part.text === 'string'
+          ? { ...part, text: tidyAnswer(part.text) }
+          : part
+      )
+    };
+  });
+}
+// ===== 画面用の整形 終了 =====
+
 async function parseResponse(response) {
   const raw = await response.text();
 
@@ -426,7 +585,7 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         conversation: conversationInfo,
-        displayHistory: visibleHistory(storedHistory)
+        displayHistory: toDisplayHistory(storedHistory)
       });
     }
 
@@ -621,11 +780,11 @@ export default async function handler(req, res) {
       );
 
       return res.status(200).json({
-        reply: getText(aiReply) || '返答が得られませんでした。',
+        reply: tidyAnswer(getText(aiReply)) || '返答が得られませんでした。',
         metrics: aiReply.appMetadata,
         conversationId: conversation.id,
         title: saved.title,
-        displayHistory: visibleHistory(history)
+        displayHistory: toDisplayHistory(history)
       });
     }
 
