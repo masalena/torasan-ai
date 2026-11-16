@@ -262,6 +262,21 @@
       overflow-wrap: anywhere;
     }
 
+    #conversation-stats {
+      padding: 9px 14px;
+      background: #191919;
+      border-bottom: 1px solid #333;
+      color: #bbb;
+      font-size: 12px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    #conversation-stats strong {
+      color: #eee;
+      font-weight: 600;
+    }
+
     .message-copy-button {
       display: block;
       margin: 0 0 8px auto;
@@ -517,6 +532,10 @@
         </div>
       </div>
 
+      <div id="conversation-stats" aria-live="polite">
+        <strong>この会話の累計</strong> ｜ 回答 0回 ｜ 入力 0 ｜ 出力 0 ｜ 応答時間 0.00秒 ｜ 推定費用 $0.000000
+      </div>
+
       <div id="chat-box"></div>
 
       <div id="input-area">
@@ -583,6 +602,32 @@
     let modelOptions = [];
     let selectedModelId = 'gemini-3.8-flash';
     let selectedThinkingLevel = 'LOW';
+
+    function renderConversationStats(metrics = null) {
+      const element = document.getElementById('conversation-stats');
+      if (!element) return;
+
+      const data = metrics || {};
+      const count = Number.isFinite(data.responseCount) ? data.responseCount : 0;
+      const input = Number.isFinite(data.inputTokenCount)
+        ? data.inputTokenCount.toLocaleString('ja-JP')
+        : '—';
+      const output = Number.isFinite(data.outputTokenCount)
+        ? data.outputTokenCount.toLocaleString('ja-JP')
+        : '—';
+      const responseTime = Number.isFinite(data.responseTimeMs)
+        ? `${(data.responseTimeMs / 1000).toFixed(2)}秒`
+        : '—';
+      const cost = Number.isFinite(data.estimatedCostUsd)
+        ? `$${data.estimatedCostUsd.toFixed(6)}`
+        : '—';
+      const costNote = Number.isFinite(data.estimatedCostUsd) &&
+        Number.isFinite(data.costKnownCount) && data.costKnownCount < count
+        ? ` (費用記録あり ${data.costKnownCount}/${count}回答)`
+        : '';
+
+      element.textContent = `この会話の累計 ｜ 回答 ${count}回 ｜ 入力 ${input} ｜ 出力 ${output} ｜ 応答時間 ${responseTime} ｜ 推定費用 ${cost}${costNote}`;
+    }
 
     // 音声読み上げ
     let speechEnabled = false;
@@ -1176,6 +1221,7 @@
           data.conversation.title;
 
         document.getElementById('chat-box').innerHTML = '';
+        renderConversationStats({ responseCount: 0, inputTokenCount: 0, outputTokenCount: 0, responseTimeMs: 0, estimatedCostUsd: 0, costKnownCount: 0 });
 
         await loadConversationList();
 
@@ -1209,6 +1255,7 @@
 
         const box = document.getElementById('chat-box');
         box.innerHTML = '';
+        renderConversationStats(data.conversationMetrics || null);
 
         for (const item of data.displayHistory || []) {
           const text = (item.parts || [])
@@ -1275,6 +1322,7 @@
 
         if (data.reply) {
           appendMessage(data.reply, 'bot', data.metrics || null);
+          renderConversationStats(data.conversationMetrics || null);
 
           document.getElementById('current-title').textContent =
             data.title || '新しい会話';
@@ -1508,21 +1556,23 @@
             );
           }
 
-          const tokenLabels = [
-            ['promptTokenCount', '入力'],
-            ['candidatesTokenCount', '出力'],
-            ['thoughtsTokenCount', '思考'],
-            ['totalTokenCount', '合計']
-          ];
+          const tokenDetails = [];
 
-          const tokenDetails = tokenLabels
-            .filter(([key]) => Number.isFinite(metadata[key]))
-            .map(([key, label]) =>
-              `${label} ${metadata[key].toLocaleString('ja-JP')}`
-            );
+          if (Number.isFinite(metadata.promptTokenCount)) {
+            tokenDetails.push(`入力 ${metadata.promptTokenCount.toLocaleString('ja-JP')}`);
+          }
+
+          if (Number.isFinite(metadata.candidatesTokenCount) && Number.isFinite(metadata.thoughtsTokenCount)) {
+            const billedOutputTokens = metadata.candidatesTokenCount + metadata.thoughtsTokenCount;
+            tokenDetails.push(`出力 ${billedOutputTokens.toLocaleString('ja-JP')}`);
+          }
 
           if (tokenDetails.length > 0) {
             details.push(`トークン: ${tokenDetails.join(' / ')}`);
+          }
+
+          if (Number.isFinite(metadata.estimatedCostUsd)) {
+            details.push(`推定費用: $${metadata.estimatedCostUsd.toFixed(6)}`);
           }
 
           if (details.length > 0) {
