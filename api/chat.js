@@ -23,6 +23,90 @@ const MODEL_OPTIONS = [
 const DEFAULT_MODEL_ID = 'gemini-3.8-flash';
 const DEFAULT_THINKING_LEVEL = 'LOW';
 
+// Google Gemini APIの有料ティア料金(USD / 100万トークン)。
+// Gemini 3.8 Flashは2027-01-01から料金が変わるため、回答時点の料金を保存する。
+function getModelPricing(modelId, date = new Date()) {
+  if (modelId === 'gemini-3.1-flash-lite') {
+    return { input: 0.25, output: 1.50 };
+  }
+
+  if (modelId === 'gemini-3.8-flash') {
+    const changeDate = new Date('2027-01-01T00:00:00Z');
+    return date < changeDate
+      ? { input: 0.75, output: 3.75 }
+      : { input: 1.50, output: 7.50 };
+  }
+
+  return null;
+}
+
+function estimateCostUsd(modelId, usage) {
+  const inputTokens = usage?.promptTokenCount;
+  const outputTokens = usage?.candidatesTokenCount;
+  const thinkingTokens = usage?.thoughtsTokenCount;
+
+  // 必要な使用量が取得できない場合、0と見なさず費用を不明にする。
+  if (![inputTokens, outputTokens, thinkingTokens].every(Number.isFinite)) {
+    return null;
+  }
+
+  const pricing = getModelPricing(modelId);
+  if (!pricing) return null;
+
+  return Number((
+    inputTokens * pricing.input / 1_000_000 +
+    (outputTokens + thinkingTokens) * pricing.output / 1_000_000
+  ).toFixed(8));
+}
+
+function getConversationMetrics(history) {
+  const replies = visibleHistory(history).filter(item =>
+    item?.role === 'model' && !item.appMetadata?.hidden
+  );
+
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let responseTimeMs = 0;
+  let estimatedCostUsd = 0;
+  let inputKnown = false;
+  let outputKnown = false;
+  let responseTimeKnown = false;
+  let costKnownCount = 0;
+
+  for (const reply of replies) {
+    const meta = reply.appMetadata || {};
+
+    if (Number.isFinite(meta.promptTokenCount)) {
+      inputTokens += meta.promptTokenCount;
+      inputKnown = true;
+    }
+
+    if (Number.isFinite(meta.candidatesTokenCount) && Number.isFinite(meta.thoughtsTokenCount)) {
+      outputTokens += meta.candidatesTokenCount + meta.thoughtsTokenCount;
+      outputKnown = true;
+    }
+
+    if (Number.isFinite(meta.elapsedMs)) {
+      responseTimeMs += meta.elapsedMs;
+      responseTimeKnown = true;
+    }
+
+    if (Number.isFinite(meta.estimatedCostUsd)) {
+      estimatedCostUsd += meta.estimatedCostUsd;
+      costKnownCount += 1;
+    }
+  }
+
+  return {
+    responseCount: replies.length,
+    inputTokenCount: inputKnown ? inputTokens : null,
+    outputTokenCount: outputKnown ? outputTokens : null,
+    responseTimeMs: responseTimeKnown ? responseTimeMs : null,
+    estimatedCostUsd: costKnownCount > 0 ? Number(estimatedCostUsd.toFixed(8)) : null,
+    costKnownCount
+  };
+}
+
 function getModelSettings(modelId, thinkingLevel) {
   const selectedModel =
     MODEL_OPTIONS.find(model => model.id === modelId) ||
@@ -770,7 +854,8 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         conversation: conversationInfo,
-        displayHistory: toDisplayHistory(storedHistory)
+        displayHistory: toDisplayHistory(storedHistory),
+        conversationMetrics: getConversationMetrics(storedHistory)
       });
     }
 
@@ -940,7 +1025,13 @@ export default async function handler(req, res) {
           : null,
         totalTokenCount: Number.isFinite(usage.totalTokenCount)
           ? usage.totalTokenCount
-          : null
+          : null,
+        estimatedCostUsd: estimateCostUsd(modelId, {
+          promptTokenCount: Number.isFinite(usage.promptTokenCount) ? usage.promptTokenCount : null,
+          candidatesTokenCount: Number.isFinite(usage.candidatesTokenCount) ? usage.candidatesTokenCount : null,
+          thoughtsTokenCount: Number.isFinite(usage.thoughtsTokenCount) ? usage.thoughtsTokenCount : null
+        }),
+        pricing: getModelPricing(modelId)
       };
 
       history.push(aiReply);
@@ -969,7 +1060,8 @@ export default async function handler(req, res) {
         metrics: aiReply.appMetadata,
         conversationId: conversation.id,
         title: saved.title,
-        displayHistory: toDisplayHistory(history)
+        displayHistory: toDisplayHistory(history),
+        conversationMetrics: getConversationMetrics(history)
       });
     }
 
