@@ -40,22 +40,52 @@ function getModelPricing(modelId, date = new Date()) {
   return null;
 }
 
-function estimateCostUsd(modelId, usage) {
-  const inputTokens = usage?.promptTokenCount;
-  const outputTokens = usage?.candidatesTokenCount;
-  const thinkingTokens = usage?.thoughtsTokenCount;
+// 出力トークン数は、通常の回答トークン + 思考トークン。
+// thoughtsTokenCount が省略された場合は、totalTokenCount - promptTokenCount
+// から推定し、それもなければ通常の回答トークン数を使う。
+function getBilledOutputTokenCount(meta = {}) {
+  if (Number.isFinite(meta.billedOutputTokenCount)) {
+    return Math.max(0, meta.billedOutputTokenCount);
+  }
 
-  // 必要な使用量が取得できない場合、0と見なさず費用を不明にする。
-  if (![inputTokens, outputTokens, thinkingTokens].every(Number.isFinite)) {
+  if (
+    Number.isFinite(meta.totalTokenCount) &&
+    Number.isFinite(meta.promptTokenCount)
+  ) {
+    return Math.max(0, meta.totalTokenCount - meta.promptTokenCount);
+  }
+
+  if (
+    Number.isFinite(meta.candidatesTokenCount) &&
+    Number.isFinite(meta.thoughtsTokenCount)
+  ) {
+    return Math.max(0, meta.candidatesTokenCount + meta.thoughtsTokenCount);
+  }
+
+  if (Number.isFinite(meta.candidatesTokenCount)) {
+    return Math.max(0, meta.candidatesTokenCount);
+  }
+
+  return null;
+}
+
+function estimateCostUsd(modelId, usage, savedPricing = null) {
+  const inputTokens = usage?.promptTokenCount;
+  const outputTokens = getBilledOutputTokenCount(usage);
+  const pricing = savedPricing || getModelPricing(modelId);
+
+  if (
+    !Number.isFinite(inputTokens) ||
+    !Number.isFinite(outputTokens) ||
+    !Number.isFinite(pricing?.input) ||
+    !Number.isFinite(pricing?.output)
+  ) {
     return null;
   }
 
-  const pricing = getModelPricing(modelId);
-  if (!pricing) return null;
-
   return Number((
     inputTokens * pricing.input / 1_000_000 +
-    (outputTokens + thinkingTokens) * pricing.output / 1_000_000
+    outputTokens * pricing.output / 1_000_000
   ).toFixed(8));
 }
 
@@ -81,8 +111,9 @@ function getConversationMetrics(history) {
       inputKnown = true;
     }
 
-    if (Number.isFinite(meta.candidatesTokenCount) && Number.isFinite(meta.thoughtsTokenCount)) {
-      outputTokens += meta.candidatesTokenCount + meta.thoughtsTokenCount;
+    const billedOutputTokens = getBilledOutputTokenCount(meta);
+    if (Number.isFinite(billedOutputTokens)) {
+      outputTokens += billedOutputTokens;
       outputKnown = true;
     }
 
@@ -91,8 +122,13 @@ function getConversationMetrics(history) {
       responseTimeKnown = true;
     }
 
-    if (Number.isFinite(meta.estimatedCostUsd)) {
-      estimatedCostUsd += meta.estimatedCostUsd;
+    // 以前の履歴に費用が保存されていない場合も、回答時に保存した料金で再計算する。
+    const answerCost = Number.isFinite(meta.estimatedCostUsd)
+      ? meta.estimatedCostUsd
+      : estimateCostUsd(meta.modelId, meta, meta.pricing);
+
+    if (Number.isFinite(answerCost)) {
+      estimatedCostUsd += answerCost;
       costKnownCount += 1;
     }
   }
@@ -500,8 +536,31 @@ function toDisplayHistory(history) {
       return item;
     }
 
+    const meta = item.appMetadata || {};
+    const billedOutputTokens = getBilledOutputTokenCount(meta);
+    const displayMetadata = Number.isFinite(billedOutputTokens)
+      ? {
+          ...meta,
+          candidatesTokenCount: Number.isFinite(meta.candidatesTokenCount)
+            ? meta.candidatesTokenCount
+            : billedOutputTokens,
+          thoughtsTokenCount: Number.isFinite(meta.thoughtsTokenCount)
+            ? meta.thoughtsTokenCount
+            : Math.max(
+                0,
+                billedOutputTokens - (
+                  Number.isFinite(meta.candidatesTokenCount)
+                    ? meta.candidatesTokenCount
+                    : billedOutputTokens
+                )
+              ),
+          billedOutputTokenCount: billedOutputTokens
+        }
+      : meta;
+
     return {
       ...item,
+      appMetadata: displayMetadata,
       parts: (item.parts || []).map(part =>
         typeof part.text === 'string'
           ? { ...part, text: tidyAnswer(part.text) }
@@ -1007,6 +1066,35 @@ export default async function handler(req, res) {
       const aiReply = answerResult.content;
 
       const usage = answerResult.usageMetadata || {};
+      const promptTokenCount = Number.isFinite(usage.promptTokenCount)
+        ? usage.promptTokenCount
+        : null;
+      const candidatesTokenCount = Number.isFinite(usage.candidatesTokenCount)
+        ? usage.candidatesTokenCount
+        : null;
+      const totalTokenCount = Number.isFinite(usage.totalTokenCount)
+        ? usage.totalTokenCount
+        : null;
+
+      // thoughtsTokenCount はAPI応答で省略される場合がある。
+      // totalTokenCount があれば差分から補い、なければ0として通常出力分を表示する。
+      const thoughtsTokenCount = Number.isFinite(usage.thoughtsTokenCount)
+        ? usage.thoughtsTokenCount
+        : (
+            Number.isFinite(totalTokenCount) &&
+            Number.isFinite(promptTokenCount) &&
+            Number.isFinite(candidatesTokenCount)
+              ? Math.max(0, totalTokenCount - promptTokenCount - candidatesTokenCount)
+              : 0
+          );
+
+      const billedOutputTokenCount = Number.isFinite(candidatesTokenCount)
+        ? candidatesTokenCount + thoughtsTokenCount
+        : (
+            Number.isFinite(totalTokenCount) && Number.isFinite(promptTokenCount)
+              ? Math.max(0, totalTokenCount - promptTokenCount)
+              : null
+          );
 
       // 回答ごとの測定値と実際に使ったモデル設定を保存
       aiReply.appMetadata = {
@@ -1014,22 +1102,20 @@ export default async function handler(req, res) {
         modelId,
         modelVersion: answerResult.modelVersion,
         thinkingLevel,
-        promptTokenCount: Number.isFinite(usage.promptTokenCount)
-          ? usage.promptTokenCount
-          : null,
-        candidatesTokenCount: Number.isFinite(usage.candidatesTokenCount)
-          ? usage.candidatesTokenCount
-          : null,
-        thoughtsTokenCount: Number.isFinite(usage.thoughtsTokenCount)
-          ? usage.thoughtsTokenCount
-          : null,
-        totalTokenCount: Number.isFinite(usage.totalTokenCount)
-          ? usage.totalTokenCount
-          : null,
+        promptTokenCount,
+        candidatesTokenCount: Number.isFinite(candidatesTokenCount)
+          ? candidatesTokenCount
+          : billedOutputTokenCount,
+        thoughtsTokenCount,
+        billedOutputTokenCount,
+        totalTokenCount,
         estimatedCostUsd: estimateCostUsd(modelId, {
-          promptTokenCount: Number.isFinite(usage.promptTokenCount) ? usage.promptTokenCount : null,
-          candidatesTokenCount: Number.isFinite(usage.candidatesTokenCount) ? usage.candidatesTokenCount : null,
-          thoughtsTokenCount: Number.isFinite(usage.thoughtsTokenCount) ? usage.thoughtsTokenCount : null
+          promptTokenCount,
+          candidatesTokenCount: Number.isFinite(candidatesTokenCount)
+            ? candidatesTokenCount
+            : billedOutputTokenCount,
+          thoughtsTokenCount,
+          billedOutputTokenCount
         }),
         pricing: getModelPricing(modelId)
       };
