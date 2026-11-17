@@ -1,31 +1,9 @@
-
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>マサトAI</title>
-
-  <!-- 数式表示（MathJax） -->
-  <script>
-    window.MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$', '$$'], ['\\[', '\\]']],
-        processEscapes: true
-      },
-      options: {
-        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-      },
-      startup: {
-        typeset: false
-      }
-    };
-  </script>
-  <script
-    defer
-    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"
-  ></script>
+  <title>Masato AI — Evaluation Demo</title>
 
   <style>
     * {
@@ -33,22 +11,88 @@
     }
 
     body {
-      background: #121212;
-      color: #fff;
-      font-family: sans-serif;
       margin: 0;
-      height: 100vh;
+      background: #121212;
+      color: #f2f2f2;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px 16px 48px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 1.5rem;
+    }
+
+    .subtitle {
+      margin: 0 0 18px;
+      color: #b5b5b5;
+      font-size: 0.95rem;
+    }
+
+    .panel {
+      background: #1b1b1b;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .settings {
       display: flex;
-      flex-direction: column;
+      flex-wrap: wrap;
+      gap: 6px 18px;
+      color: #c8c8c8;
+      font-size: 0.85rem;
+    }
+
+    .settings strong {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: #d0d0d0;
+      font-size: 0.9rem;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      background: #252525;
+      color: #fff;
+      font-size: 16px;
+      font-family: inherit;
+    }
+
+    textarea {
+      min-height: 130px;
+      resize: vertical;
+      line-height: 1.5;
     }
 
     button {
-      padding: 10px 14px;
+      padding: 10px 16px;
       border: none;
       border-radius: 8px;
-      color: white;
-      cursor: pointer;
+      background: #3a3a3a;
+      color: #fff;
       font-size: 14px;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      background: #4d4d4d;
     }
 
     button:disabled {
@@ -56,1724 +100,541 @@
       cursor: not-allowed;
     }
 
-    input,
-    textarea {
-      padding: 12px;
-      border: none;
-      border-radius: 8px;
-      background: #252525;
-      color: white;
-      font-size: 16px;
-      min-width: 0;
-      font-family: sans-serif;
+    #run-button {
+      background: #1a73e8;
+      font-size: 15px;
+      padding: 12px 22px;
     }
 
-    #login-screen {
-      width: min(420px, calc(100% - 32px));
-      margin: auto;
+    #run-button:hover:not(:disabled) {
+      background: #3b8bf0;
+    }
+
+    .samples {
       display: flex;
-      flex-direction: column;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+
+    .samples span {
+      width: 100%;
+      color: #9a9a9a;
+      font-size: 0.8rem;
+    }
+
+    .samples button {
+      padding: 7px 11px;
+      font-size: 13px;
+      background: #2a2a2a;
+      border: 1px solid #3c3c3c;
+    }
+
+    .run-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
       gap: 12px;
     }
 
-    #login-screen h2 {
-      text-align: center;
+    #status {
+      color: #bdbdbd;
+      font-size: 0.9rem;
     }
 
-    #login-screen button {
-      width: 100%;
+    #status.error {
+      color: #ff8a80;
     }
 
-    #auth-status {
-      min-height: 24px;
-      color: #ccc;
-      font-size: 14px;
-      line-height: 1.5;
+    .results {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
     }
 
-    #app {
-      display: none;
-      flex: 1;
-      min-height: 0;
-    }
-
-    #sidebar {
-      width: 260px;
+    .card {
+      min-width: 0;
       background: #1b1b1b;
-      border-right: 1px solid #333;
-      display: flex;
-      flex-direction: column;
-      padding: 12px;
-      gap: 10px;
-      overflow: hidden;
-    }
-
-    #sidebar h3 {
-      margin: 4px 0;
-    }
-
-    #conversation-list {
-      flex: 1;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .conversation-row {
-      display: flex;
-      align-items: stretch;
-      gap: 4px;
-      width: 100%;
-    }
-
-    .conversation-item {
-      flex: 1;
-      min-width: 0;
-      width: 100%;
-      text-align: left;
-      background: #292929;
-      overflow-wrap: anywhere;
-    }
-
-    .conversation-item.selected {
-      background: #0759a8;
-    }
-
-    .conversation-rename {
-      flex: 0 0 34px;
-      padding: 8px 0;
-      background: #454545;
-      color: #fff;
-      font-size: 16px;
-    }
-
-    .conversation-rename:hover {
-      background: #666;
-    }
-
-    .conversation-delete {
-      flex: 0 0 36px;
-      padding: 8px 0;
-      background: #663333;
-      color: #fff;
-      font-size: 18px;
-    }
-
-    .conversation-delete:hover {
-      background: #a52a2a;
-    }
-
-    #main-area {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-    }
-
-    #top-bar {
-      min-height: 48px;
-      padding: 8px 14px;
-      background: #1e1e1e;
-      border-bottom: 1px solid #333;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    #current-title {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
-      flex: 1;
-    }
-
-    .model-controls {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex: 0 0 auto;
-    }
-
-    .model-control {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      color: #bbb;
-      font-size: 12px;
-      white-space: nowrap;
-    }
-
-    .model-control select {
-      max-width: 190px;
-      padding: 7px 9px;
-      border: 1px solid #444;
-      border-radius: 7px;
-      background: #292929;
-      color: #fff;
-      font-size: 13px;
-    }
-
-    #chat-box {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-    }
-
-    .message {
-      max-width: 80%;
-      padding: 12px;
+      border: 1px solid #333;
       border-radius: 12px;
-      font-size: 1.05rem;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      line-height: 1.6;
-    }
-
-    .user {
-      align-self: flex-end;
-      background: #007aff;
-    }
-
-    .bot {
-      align-self: flex-start;
-      background: #2c2c2e;
-    }
-
-    .message-text {
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-
-    .message-metadata {
-      margin-top: 10px;
-      padding-top: 7px;
-      border-top: 1px solid rgba(255, 255, 255, 0.14);
-      color: #aaa;
-      font-size: 11px;
-      line-height: 1.5;
-      white-space: normal;
-      overflow-wrap: anywhere;
-    }
-
-    #conversation-stats {
-      padding: 9px 14px;
-      background: #191919;
-      border-bottom: 1px solid #333;
-      color: #bbb;
-      font-size: 12px;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-    }
-
-    #conversation-stats strong {
-      color: #eee;
-      font-weight: 600;
-    }
-
-    .message-copy-button {
-      display: block;
-      margin: 0 0 8px auto;
-      padding: 6px 10px;
-      border-radius: 6px;
-      background: #555;
-      color: #fff;
-      font-size: 12px;
-    }
-
-    .message-copy-button:hover {
-      background: #777;
-    }
-
-    .code-block {
-      width: 100%;
-      max-width: 100%;
-      margin: 12px 0;
-      overflow: hidden;
-      border: 1px solid #d5d5d5;
-      border-radius: 9px;
-      background: #f7f7f7;
-      color: #222;
-    }
-
-    .code-block-header {
-      min-height: 36px;
-      padding: 5px 8px 5px 12px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      background: #e9e9e9;
-      border-bottom: 1px solid #d5d5d5;
-    }
-
-    .code-language {
-      color: #555;
-      font-size: 12px;
-      overflow-wrap: anywhere;
-    }
-
-    .code-copy-button {
-      flex: 0 0 auto;
-      padding: 6px 10px;
-      border-radius: 6px;
-      background: #333;
-      color: #fff;
-      font-size: 12px;
-    }
-
-    .code-copy-button:hover {
-      background: #555;
-    }
-
-    .code-block pre {
-      max-width: 100%;
-      margin: 0;
       padding: 14px;
-      overflow-x: auto;
-      background: #f7f7f7;
-      color: #222;
-      font-family: Consolas, Monaco, 'Courier New', monospace;
-      font-size: 13px;
-      line-height: 1.55;
-      white-space: pre;
-      tab-size: 2;
     }
 
-    .code-block code {
-      font-family: inherit;
-      white-space: pre;
+    .card.os {
+      border-color: #2e5e9e;
     }
 
-    #input-area {
+    .card h2 {
+      margin: 0 0 2px;
+      font-size: 1.05rem;
+    }
+
+    .card .caption {
+      margin: 0 0 10px;
+      color: #9a9a9a;
+      font-size: 0.8rem;
+    }
+
+    .answer {
+      min-height: 80px;
       padding: 12px;
-      background: #1e1e1e;
+      border-radius: 8px;
+      background: #232323;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 0.97rem;
+    }
+
+    .answer.placeholder {
+      color: #7d7d7d;
+    }
+
+    .answer.error {
+      color: #ff8a80;
+    }
+
+    table.metrics {
+      width: 100%;
+      margin-top: 12px;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    table.metrics td {
+      padding: 5px 4px;
+      border-top: 1px solid #2c2c2c;
+    }
+
+    table.metrics td:last-child {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    table.metrics tr.total td {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    table.metrics td:first-child {
+      color: #bdbdbd;
+    }
+
+    .export-row {
       display: flex;
-      gap: 8px;
       flex-wrap: wrap;
-      align-items: flex-end;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
     }
 
-    #user-input {
-      flex: 1;
-      width: 100px;
-      min-height: 46px;
-      max-height: 160px;
-      resize: none;
-      overflow-y: auto;
-      line-height: 1.5;
+    #export-status {
+      color: #9fd3a6;
+      font-size: 0.85rem;
     }
 
-    #speech-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      padding: 0 12px 12px;
-      background: #1e1e1e;
+    .notes {
+      margin-top: 18px;
+      color: #9a9a9a;
+      font-size: 0.8rem;
+      line-height: 1.7;
     }
 
-    #app-status {
-      padding: 4px 12px;
-      background: #1e1e1e;
-      color: #aaa;
-      font-size: 12px;
-      min-height: 20px;
+    .notes p {
+      margin: 0 0 6px;
     }
 
-    @media (max-width: 650px) {
-      #sidebar {
-        width: 125px;
-        padding: 7px;
-      }
-
-      #sidebar button {
-        padding: 9px 6px;
-        font-size: 12px;
-      }
-
-      .conversation-rename {
-        flex-basis: 27px;
-        font-size: 13px;
-      }
-
-      .conversation-delete {
-        flex-basis: 30px;
-        font-size: 16px;
-      }
-
-      #top-bar {
-        flex-wrap: wrap;
-        align-items: flex-start;
-        padding: 8px 10px;
-      }
-
-      #current-title {
-        flex-basis: 100%;
-      }
-
-      .model-controls {
-        width: 100%;
-        flex-wrap: wrap;
-      }
-
-      .model-control {
-        flex: 1 1 140px;
-        min-width: 0;
-      }
-
-      .model-control select {
-        width: 100%;
-        max-width: none;
-        min-width: 0;
-      }
-
-      #chat-box {
-        padding: 12px;
-      }
-
-      .message {
-        max-width: 92%;
-        font-size: 1rem;
-      }
-
-      #input-area {
-        padding: 8px;
-      }
-
-      #user-input {
-        max-height: 120px;
-      }
-
-      #speech-controls {
-        padding: 0 8px 8px;
-      }
-
-      #speech-controls button {
-        padding: 9px 10px;
-        font-size: 12px;
+    @media (max-width: 800px) {
+      .results {
+        grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
 
 <body>
+  <div class="page">
 
-  <!-- ログイン画面 -->
-  <div id="login-screen">
-    <h2>マサトAI</h2>
+    <h1>Masato AI — Evaluation Demo</h1>
+    <p class="subtitle">
+      The same model, the same settings — answered once with the Masato OS and once without it.
+    </p>
 
-    <input
-      type="email"
-      id="email"
-      placeholder="メールアドレス"
-      autocomplete="email"
-    >
+    <div class="panel settings">
+      <span>Model: <strong>Gemini 3.8 Flash</strong></span>
+      <span>Thinking level: <strong>Low</strong></span>
+      <span>Each run is independent: <strong>no conversation history</strong></span>
+    </div>
 
-    <input
-      type="password"
-      id="password"
-      placeholder="パスワード"
-      autocomplete="current-password"
-    >
+    <div class="panel">
+      <label for="code">Access code</label>
+      <input
+        id="code"
+        type="password"
+        autocomplete="off"
+        placeholder="Enter the access code you were given"
+      >
+    </div>
 
-    <button
-      onclick="login()"
-      style="background:#007aff;"
-    >ログイン</button>
+    <div class="panel">
+      <label for="question">Your question</label>
+      <textarea
+        id="question"
+        placeholder="Type a question in English or Japanese."
+      ></textarea>
 
-    <button
-      onclick="signup()"
-      style="background:#34a853;"
-    >新規登録</button>
-
-    <div id="auth-status"></div>
-  </div>
-
-  <!-- ログイン後のアプリ画面 -->
-  <div id="app">
-
-    <aside id="sidebar">
-      <h3>会話履歴</h3>
-
-      <button
-        onclick="newConversation()"
-        style="background:#34a853;"
-      >＋ 新しい会話</button>
-
-      <div id="conversation-list"></div>
-
-      <button
-        onclick="logout()"
-        style="background:#555;"
-      >ログアウト</button>
-    </aside>
-
-    <main id="main-area">
-
-      <div id="top-bar">
-        <strong id="current-title">新しい会話</strong>
-
-        <div id="model-controls" class="model-controls">
-          <label class="model-control">
-            モデル
-            <select id="model-select" aria-label="使用するGeminiモデル"></select>
-          </label>
-
-          <label class="model-control">
-            思考
-            <select id="thinking-select" aria-label="思考レベル"></select>
-          </label>
-        </div>
+      <div class="samples">
+        <span>Sample questions (click to fill in):</span>
+        <button type="button" data-sample="missing">Missing information</button>
+        <button type="button" data-sample="logic">Logic puzzle</button>
+        <button type="button" data-sample="alien">Pattern inference</button>
+        <button type="button" data-sample="life">Everyday dilemma</button>
       </div>
 
-      <div id="conversation-stats" aria-live="polite">
-        <strong>この会話の累計</strong> ｜ 回答 0回 ｜ 入力 0 ｜ 出力 0 ｜ 応答時間 0.00秒 ｜ 推定費用 $0.000000
+      <div class="run-row">
+        <button id="run-button" type="button">Run both</button>
+        <span id="status"></span>
       </div>
+    </div>
 
-      <div id="chat-box"></div>
+    <div class="results">
+      <article class="card os" id="card-os">
+        <h2>With Masato OS</h2>
+        <p class="caption">Gemini 3.8 Flash (Low) + the Masato OS</p>
+        <div class="answer placeholder" id="answer-os">The answer will appear here.</div>
+        <table class="metrics" id="metrics-os"></table>
+      </article>
 
-      <div id="input-area">
-        <textarea
-          id="user-input"
-          rows="1"
-          placeholder="メッセージを入力..."
-        ></textarea>
+      <article class="card" id="card-base">
+        <h2>Baseline (no OS)</h2>
+        <p class="caption">Gemini 3.8 Flash (Low), nothing added</p>
+        <div class="answer placeholder" id="answer-base">The answer will appear here.</div>
+        <table class="metrics" id="metrics-base"></table>
+      </article>
+    </div>
 
-        <button
-          id="send-button"
-          onclick="sendMessage()"
-          style="background:#34c759;"
-        >送信</button>
+    <div class="export-row">
+      <button id="copy-json" type="button" disabled>Copy results (JSON)</button>
+      <button id="copy-text" type="button" disabled>Copy results (text)</button>
+      <span id="export-status"></span>
+    </div>
 
-        <button
-          onclick="startVoiceInput()"
-          style="background:#ff9500;"
-        >マイク</button>
-      </div>
+    <div class="notes">
+      <p>
+        Token counts come from the model API. "Thinking tokens" are the model's internal reasoning
+        and are billed as output. The "Masato OS" side makes two API calls per question
+        (a short setup call, then the answer); the table shows both, and the totals include both.
+      </p>
+      <p>
+        On the "With Masato OS" side, one sentence is appended to the system instruction so the
+        answer follows the language of the question. It is recorded in the copied JSON.
+      </p>
+      <p>
+        This demo does not save your questions or answers on its own server. Requests are processed
+        through the Google Gemini API; please see Google's terms for how API data is handled.
+      </p>
+    </div>
 
-      <div id="speech-controls">
-
-        <button
-          id="speech-toggle"
-          onclick="toggleSpeech()"
-          style="background:#666;"
-        >音声OFF</button>
-
-        <button
-          onclick="playSpeech()"
-          style="background:#007aff;"
-        >再生</button>
-
-        <button
-          onclick="pauseSpeech()"
-          style="background:#ff9500;"
-        >一時停止</button>
-
-        <button
-          onclick="resumeSpeech()"
-          style="background:#34a853;"
-        >再開</button>
-
-        <button
-          onclick="stopSpeech()"
-          style="background:#ff3b30;"
-        >停止</button>
-
-      </div>
-
-      <div id="app-status"></div>
-
-    </main>
   </div>
 
   <script>
-    let config = null;
-    let session = null;
-    let currentConversationId = null;
-    let isSending = false;
+    const SAMPLES = {
+      missing:
+        'A cylindrical glass with a diameter of 10 cm contains water to a depth of 5 cm. ' +
+        'The glass is tilted slowly, without spilling any water, until the water surface just reaches the rim. ' +
+        'What is the exact geometric shape of the water surface in contact with the glass, ' +
+        'and what is the tilt angle at that moment (the angle between the base of the glass and the horizontal plane)?',
 
-    // モデル選択
-    let modelOptions = [];
-    let selectedModelId = 'gemini-3.8-flash';
-    let selectedThinkingLevel = 'LOW';
+      logic:
+        'Five cars, P, Q, R, S and T, are parked in a single row. ' +
+        'Q is immediately to the right of P. R is immediately to the left of S. ' +
+        'T is to the left of P, but to the right of R. ' +
+        'Give the position of every car from left to right.',
 
-    function renderConversationStats(metrics = null) {
-      const element = document.getElementById('conversation-stats');
-      if (!element) return;
+      alien:
+        'Infer the translation rules from the examples, then answer the last question. ' +
+        'Rule 1: [ZOR-7] + [KIL-2] -> "A blue flame burns". ' +
+        'Rule 2: [ZOR-4] + [MIP-5] -> "A blue wind blows". ' +
+        'Rule 3: [LUN-7] + [KIL-2] -> "A red flame burns". ' +
+        'What does [LUN-4] + [MIP-3] mean? Explain your reasoning, including which part of the code means what.',
 
-      const data = metrics || {};
-      const count = Number.isFinite(data.responseCount) ? data.responseCount : 0;
-      const input = Number.isFinite(data.inputTokenCount)
-        ? data.inputTokenCount.toLocaleString('ja-JP')
-        : '—';
-      const output = Number.isFinite(data.outputTokenCount)
-        ? data.outputTokenCount.toLocaleString('ja-JP')
-        : '—';
-      const responseTime = Number.isFinite(data.responseTimeMs)
-        ? `${(data.responseTimeMs / 1000).toFixed(2)}秒`
-        : '—';
-      const cost = Number.isFinite(data.estimatedCostUsd)
-        ? `$${data.estimatedCostUsd.toFixed(6)}`
-        : '—';
-      const costNote = Number.isFinite(data.estimatedCostUsd) &&
-        Number.isFinite(data.costKnownCount) && data.costKnownCount < count
-        ? ` (費用記録あり ${data.costKnownCount}/${count}回答)`
-        : '';
+      life:
+        'I am a stay-at-home parent and I am exhausted from childcare and housework. ' +
+        'My partner does not help at all, even when I ask. What should I do?'
+    };
 
-      element.textContent = `この会話の累計 ｜ 回答 ${count}回 ｜ 入力 ${input} ｜ 出力 ${output} ｜ 応答時間 ${responseTime} ｜ 推定費用 ${cost}${costNote}`;
+    const els = {
+      code: document.getElementById('code'),
+      question: document.getElementById('question'),
+      run: document.getElementById('run-button'),
+      status: document.getElementById('status'),
+      answerOs: document.getElementById('answer-os'),
+      answerBase: document.getElementById('answer-base'),
+      metricsOs: document.getElementById('metrics-os'),
+      metricsBase: document.getElementById('metrics-base'),
+      copyJson: document.getElementById('copy-json'),
+      copyText: document.getElementById('copy-text'),
+      exportStatus: document.getElementById('export-status')
+    };
+
+    let lastRun = null;
+
+    // 合言葉は、このタブを閉じるまでだけ覚える
+    try {
+      els.code.value = sessionStorage.getItem('demo_access_code') || '';
+    } catch {
+      els.code.value = '';
     }
 
-    // 音声読み上げ
-    let speechEnabled = false;
-    let lastSpeechText = '';
-
-    const SESSION_KEY = 'masato_ai_session';
-    const MODEL_SETTINGS_KEY = 'masato_ai_model_settings';
-
-    // -------------------------
-    // 共通処理
-    // -------------------------
-
-    async function readJson(response) {
-      const raw = await response.text();
-
-      try {
-        return raw ? JSON.parse(raw) : {};
-      } catch {
-        throw new Error('サーバーからの応答を読み取れませんでした。');
-      }
-    }
-
-    function setAuthStatus(message) {
-      document.getElementById('auth-status').textContent = message;
-    }
-
-    function setAppStatus(message) {
-      document.getElementById('app-status').textContent = message;
-    }
-
-    function saveSession(data) {
-      session = {
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-        expires_at: Date.now() + (data.expires_in || 3600) * 1000
-      };
-
-      localStorage.setItem(
-        SESSION_KEY,
-        JSON.stringify(session)
-      );
-    }
-
-    function clearSession() {
-      session = null;
-      localStorage.removeItem(SESSION_KEY);
-    }
-
-    // -------------------------
-    // 入力欄の高さ調整
-    // -------------------------
-
-    const userInput = document.getElementById('user-input');
-
-    function resizeUserInput() {
-      userInput.style.height = 'auto';
-
-      const maxHeight = window.innerWidth <= 650 ? 120 : 160;
-
-      userInput.style.height =
-        Math.min(userInput.scrollHeight, maxHeight) + 'px';
-    }
-
-    userInput.addEventListener('input', resizeUserInput);
-
-    // -------------------------
-    // Supabaseの設定取得
-    // -------------------------
-
-    async function loadConfig() {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          action: 'config'
-        })
+    document.querySelectorAll('[data-sample]').forEach(button => {
+      button.addEventListener('click', () => {
+        els.question.value = SAMPLES[button.dataset.sample] || '';
+        els.question.focus();
       });
-
-      const data = await readJson(response);
-
-      if (!response.ok) {
-        throw new Error(data.error || '設定を読み込めませんでした。');
-      }
-
-      config = data;
-      initializeModelSettings();
-    }
-
-    // -------------------------
-    // モデル・思考レベル選択
-    // -------------------------
-
-    function initializeModelSettings() {
-      modelOptions = Array.isArray(config.modelOptions)
-        ? config.modelOptions
-        : [];
-
-      if (modelOptions.length === 0) {
-        throw new Error('モデル選択肢を読み込めませんでした。');
-      }
-
-      let stored = null;
-
-      try {
-        stored = JSON.parse(
-          localStorage.getItem(MODEL_SETTINGS_KEY) || 'null'
-        );
-      } catch {
-        stored = null;
-      }
-
-      const storedModel = modelOptions.find(
-        model => model.id === stored?.modelId
-      );
-
-      const defaultModel = modelOptions.find(
-        model => model.id === config.defaultModelId
-      ) || modelOptions[0];
-
-      const activeModel = storedModel || defaultModel;
-      selectedModelId = activeModel.id;
-
-      const requestedLevel = String(
-        stored?.thinkingLevel || config.defaultThinkingLevel || 'LOW'
-      ).toUpperCase();
-
-      selectedThinkingLevel = activeModel.thinkingLevels.includes(
-        requestedLevel
-      )
-        ? requestedLevel
-        : (
-            activeModel.thinkingLevels.includes('LOW')
-              ? 'LOW'
-              : activeModel.thinkingLevels[0]
-          );
-
-      renderModelControls();
-      saveModelSettings();
-    }
-
-    function renderModelControls() {
-      const modelSelect = document.getElementById('model-select');
-      const thinkingSelect = document.getElementById('thinking-select');
-
-      modelSelect.innerHTML = '';
-
-      for (const model of modelOptions) {
-        const option = document.createElement('option');
-        option.value = model.id;
-        option.textContent = model.label;
-        modelSelect.appendChild(option);
-      }
-
-      modelSelect.value = selectedModelId;
-      updateThinkingOptions();
-
-      modelSelect.onchange = () => {
-        selectedModelId = modelSelect.value;
-
-        const model = modelOptions.find(
-          item => item.id === selectedModelId
-        );
-
-        if (!model.thinkingLevels.includes(selectedThinkingLevel)) {
-          selectedThinkingLevel = model.thinkingLevels.includes('LOW')
-            ? 'LOW'
-            : model.thinkingLevels[0];
-        }
-
-        updateThinkingOptions();
-        saveModelSettings();
-        setAppStatus('モデル設定を変更しました。次の送信から適用されます。');
-      };
-
-      thinkingSelect.onchange = () => {
-        selectedThinkingLevel = thinkingSelect.value;
-        saveModelSettings();
-        setAppStatus('思考レベルを変更しました。次の送信から適用されます。');
-      };
-    }
-
-    function updateThinkingOptions() {
-      const thinkingSelect = document.getElementById('thinking-select');
-      const model = modelOptions.find(
-        item => item.id === selectedModelId
-      );
-
-      if (!model) return;
-
-      thinkingSelect.innerHTML = '';
-
-      for (const level of model.thinkingLevels) {
-        const option = document.createElement('option');
-        option.value = level;
-        option.textContent = level;
-        thinkingSelect.appendChild(option);
-      }
-
-      thinkingSelect.value = selectedThinkingLevel;
-    }
-
-    function saveModelSettings() {
-      localStorage.setItem(
-        MODEL_SETTINGS_KEY,
-        JSON.stringify({
-          modelId: selectedModelId,
-          thinkingLevel: selectedThinkingLevel
-        })
-      );
-    }
-
-    // -------------------------
-    // Supabase認証
-    // -------------------------
-
-    async function authRequest(path, body) {
-      const response = await fetch(
-        `${config.supabaseUrl}/auth/v1/${path}`,
-        {
-          method: 'POST',
-          headers: {
-            apikey: config.supabaseKey,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(body)
-        }
-      );
-
-      const data = await readJson(response);
-
-      if (!response.ok) {
-        throw new Error(
-          data.msg ||
-          data.message ||
-          data.error_description ||
-          data.error ||
-          '認証に失敗しました。'
-        );
-      }
-
-      return data;
-    }
-
-    async function signup() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-
-      if (!email || !password) {
-        setAuthStatus('メールアドレスとパスワードを入力してください。');
-        return;
-      }
-
-      try {
-        setAuthStatus('登録しています...');
-
-        const data = await authRequest('signup', {
-          email,
-          password
-        });
-
-        if (data.access_token) {
-          saveSession(data);
-          await enterApp();
-        } else {
-          setAuthStatus(
-            '登録メールを送信しました。メールを確認して認証を完了したあと、ログインしてください。'
-          );
-        }
-
-      } catch (error) {
-        setAuthStatus('登録エラー: ' + error.message);
-      }
-    }
-
-    async function login() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-
-      if (!email || !password) {
-        setAuthStatus('メールアドレスとパスワードを入力してください。');
-        return;
-      }
-
-      try {
-        setAuthStatus('ログインしています...');
-
-        const data = await authRequest(
-          'token?grant_type=password',
-          { email, password }
-        );
-
-        saveSession(data);
-        await enterApp();
-
-      } catch (error) {
-        setAuthStatus('ログインエラー: ' + error.message);
-      }
-    }
-
-    async function refreshSession() {
-      if (!session?.refresh_token) {
-        return false;
-      }
-
-      try {
-        const data = await authRequest(
-          'token?grant_type=refresh_token',
-          {
-            refresh_token: session.refresh_token
-          }
-        );
-
-        saveSession(data);
-        return true;
-
-      } catch {
-        clearSession();
-        return false;
-      }
-    }
-
-    async function logout() {
-      clearSession();
-
-      currentConversationId = null;
-      conversationHistory = [];
-
-      window.speechSynthesis.cancel();
-
-      document.getElementById('app').style.display = 'none';
-      document.getElementById('login-screen').style.display = 'flex';
-
-      setAuthStatus('ログアウトしました。');
-    }
-
-    // -------------------------
-    // API通信
-    // -------------------------
-
-    async function apiRequest(payload, retry = true) {
-      if (!session?.access_token) {
-        throw new Error('ログインしてください。');
-      }
-
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await readJson(response);
-
-      if (response.status === 401 && retry) {
-        const refreshed = await refreshSession();
-
-        if (refreshed) {
-          return apiRequest(payload, false);
-        }
-
-        throw new Error('ログインの有効期限が切れました。再ログインしてください。');
-      }
-
-      if (!response.ok) {
-        throw new Error(data.error || '通信に失敗しました。');
-      }
-
-      return data;
-    }
-
-    // -------------------------
-    // アプリ開始
-    // -------------------------
-
-    async function enterApp() {
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('app').style.display = 'flex';
-
-      await loadConversationList();
-
-      const list = await apiRequest({
-        action: 'list'
-      });
-
-      if (list.conversations.length > 0) {
-        await loadConversation(list.conversations[0].id);
-      } else {
-        await newConversation();
-      }
-    }
-
-    // -------------------------
-    // 会話一覧
-    // -------------------------
-
-    async function loadConversationList() {
-      const data = await apiRequest({
-        action: 'list'
-      });
-
-      const list = document.getElementById('conversation-list');
-      list.innerHTML = '';
-
-      for (const conversation of data.conversations) {
-        const row = document.createElement('div');
-        row.className = 'conversation-row';
-
-        const button = document.createElement('button');
-
-        button.className = 'conversation-item';
-
-        if (conversation.id === currentConversationId) {
-          button.classList.add('selected');
-        }
-
-        button.textContent = conversation.title || '新しい会話';
-
-        button.onclick = () => {
-          loadConversation(conversation.id);
-        };
-
-        list.appendChild(button);
-
-        const renameButton = document.createElement('button');
-        renameButton.className = 'conversation-rename';
-        renameButton.textContent = '✎';
-        renameButton.title = 'この会話の名前を変更';
-        renameButton.setAttribute(
-          'aria-label',
-          'この会話の名前を変更'
-        );
-
-        renameButton.onclick = () => {
-          renameConversation(
-            conversation.id,
-            conversation.title || '新しい会話'
-          );
-        };
-
-        const deleteButton = document.createElement('button');
-
-        deleteButton.className = 'conversation-delete';
-        deleteButton.textContent = '×';
-        deleteButton.title = 'この会話を削除';
-        deleteButton.setAttribute(
-          'aria-label',
-          'この会話を削除'
-        );
-
-        deleteButton.onclick = () => {
-          deleteConversation(
-            conversation.id,
-            conversation.title || '新しい会話'
-          );
-        };
-
-        row.appendChild(button);
-        row.appendChild(renameButton);
-        row.appendChild(deleteButton);
-
-        list.appendChild(row);
-      }
-    }
-
-    // -------------------------
-    // 会話タイトル変更
-    // -------------------------
-
-    async function renameConversation(id, currentTitle) {
-      if (isSending) {
-        setAppStatus('メッセージの送信中は名前を変更できません。');
-        return;
-      }
-
-      const newTitle = window.prompt(
-        '新しい会話タイトルを入力してください。',
-        currentTitle
-      );
-
-      if (newTitle === null) return;
-
-      const cleanTitle = newTitle.trim();
-
-      if (!cleanTitle) {
-        setAppStatus('タイトルを入力してください。');
-        return;
-      }
-
-      try {
-        setAppStatus('会話タイトルを変更しています...');
-
-        const data = await apiRequest({
-          action: 'rename',
-          conversationId: id,
-          title: cleanTitle
-        });
-
-        if (id === currentConversationId) {
-          document.getElementById('current-title').textContent =
-            data.conversation.title;
-        }
-
-        await loadConversationList();
-        setAppStatus('会話タイトルを変更しました。');
-
-      } catch (error) {
-        setAppStatus('名前変更エラー: ' + error.message);
-      }
-    }
-
-    // -------------------------
-    // 会話削除
-    // -------------------------
-
-    async function deleteConversation(id, title) {
-      if (isSending) {
-        setAppStatus(
-          'メッセージの送信中は会話を削除できません。'
-        );
-        return;
-      }
-
-      const confirmed = window.confirm(
-        `「${title}」を削除しますか？\n\nこの操作は取り消せません。`
-      );
-
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        setAppStatus('会話を削除しています...');
-
-        await apiRequest({
-          action: 'delete',
-          conversationId: id
-        });
-
-        if (id === currentConversationId) {
-          currentConversationId = null;
-
-          window.speechSynthesis.cancel();
-
-          document.getElementById('chat-box').innerHTML = '';
-          document.getElementById('current-title').textContent =
-            '新しい会話';
-
-          lastSpeechText = '';
-
-          const data = await apiRequest({
-            action: 'list'
-          });
-
-          if (data.conversations.length > 0) {
-            await loadConversation(data.conversations[0].id);
-          } else {
-            await newConversation();
-          }
-
-        } else {
-          await loadConversationList();
-          setAppStatus('会話を削除しました。');
-        }
-
-      } catch (error) {
-        setAppStatus('削除エラー: ' + error.message);
-      }
-    }
-
-    // -------------------------
-    // 新しい会話
-    // -------------------------
-
-    async function newConversation() {
-      try {
-        setAppStatus('新しい会話を作成しています...');
-
-        window.speechSynthesis.cancel();
-
-        const data = await apiRequest({
-          action: 'new'
-        });
-
-        currentConversationId = data.conversation.id;
-
-        document.getElementById('current-title').textContent =
-          data.conversation.title;
-
-        document.getElementById('chat-box').innerHTML = '';
-        renderConversationStats({ responseCount: 0, inputTokenCount: 0, outputTokenCount: 0, responseTimeMs: 0, estimatedCostUsd: 0, costKnownCount: 0 });
-
-        await loadConversationList();
-
-        setAppStatus('新しい会話を開始できます。');
-        document.getElementById('user-input').focus();
-
-      } catch (error) {
-        setAppStatus('エラー: ' + error.message);
-      }
-    }
-
-    // -------------------------
-    // 過去の会話を読み込む
-    // -------------------------
-
-    async function loadConversation(id) {
-      try {
-        setAppStatus('会話を読み込んでいます...');
-
-        window.speechSynthesis.cancel();
-
-        const data = await apiRequest({
-          action: 'load',
-          conversationId: id
-        });
-
-        currentConversationId = id;
-
-        document.getElementById('current-title').textContent =
-          data.conversation.title || '新しい会話';
-
-        const box = document.getElementById('chat-box');
-        box.innerHTML = '';
-        renderConversationStats(data.conversationMetrics || null);
-
-        for (const item of data.displayHistory || []) {
-          const text = (item.parts || [])
-            .filter(part => part.text)
-            .map(part => part.text)
-            .join('\n');
-
-          if (!text) continue;
-
-          if (item.role === 'user') {
-            appendMessage(text, 'user');
-          } else if (item.role === 'model') {
-            appendMessage(text, 'bot', item.appMetadata || null);
-          }
-        }
-
-        await loadConversationList();
-
-        setAppStatus('会話を読み込みました。');
-
-      } catch (error) {
-        setAppStatus('読み込みエラー: ' + error.message);
-      }
-    }
-
-    // -------------------------
-    // メッセージ送信
-    // -------------------------
-
-    async function sendMessage() {
-      if (isSending) return;
-
-      const input = document.getElementById('user-input');
-      const sendButton = document.getElementById('send-button');
-
-      const text = input.value.trim();
-
-      if (!text) return;
-
-      if (!currentConversationId) {
-        setAppStatus('会話を選択してください。');
-        return;
-      }
-
-      window.speechSynthesis.cancel();
-
-      appendMessage(text, 'user');
-      input.value = '';
-      resizeUserInput();
-
-      isSending = true;
-      sendButton.disabled = true;
-
-      setAppStatus('マサトAIが考えています...');
-
-      try {
-        const data = await apiRequest({
-          action: 'chat',
-          conversationId: currentConversationId,
-          message: text,
-          modelId: selectedModelId,
-          thinkingLevel: selectedThinkingLevel
-        });
-
-        if (data.reply) {
-          appendMessage(data.reply, 'bot', data.metrics || null);
-          renderConversationStats(data.conversationMetrics || null);
-
-          document.getElementById('current-title').textContent =
-            data.title || '新しい会話';
-
-          if (speechEnabled) {
-            speakText(data.reply);
-          }
-
-          await loadConversationList();
-
-          setAppStatus('保存しました。');
-
-        } else {
-          appendMessage('返答が得られませんでした。', 'bot');
-          setAppStatus('返答が得られませんでした。');
-        }
-
-      } catch (error) {
-        appendMessage('エラー: ' + error.message, 'bot');
-        setAppStatus('エラーが発生しました。');
-
-      } finally {
-        isSending = false;
-        sendButton.disabled = false;
-        input.focus();
-      }
-    }
-
-    // -------------------------
-    // 音声入力
-    // -------------------------
-
-    function startVoiceInput() {
-      const Recognition =
-        window.SpeechRecognition ||
-        window.webkitSpeechRecognition;
-
-      if (!Recognition) {
-        appendMessage(
-          'このブラウザでは音声入力を利用できません。',
-          'bot'
-        );
-        return;
-      }
-
-      const rec = new Recognition();
-
-      rec.lang = 'ja-JP';
-
-      // 連続認識を要求する
-      rec.continuous = true;
-
-      // 確定した認識結果を受け取る
-      rec.interimResults = false;
-
-      rec.maxAlternatives = 1;
-
-      let addedText = '';
-
-      rec.onresult = (event) => {
-        let newText = '';
-
-        for (
-          let i = event.resultIndex;
-          i < event.results.length;
-          i++
-        ) {
-          const result = event.results[i];
-
-          if (result.isFinal) {
-            newText += result[0].transcript;
-          }
-        }
-
-        if (!newText.trim()) return;
-
-        addedText += newText;
-
-        const existingText = userInput.value.trimEnd();
-
-        userInput.value = existingText
-          ? existingText + ' ' + newText.trim()
-          : newText.trim();
-
-        resizeUserInput();
-
-        setAppStatus(
-          '音声を認識しています。続けて話すか、内容を確認して送信してください。'
-        );
-      };
-
-      rec.onerror = (event) => {
-        setAppStatus('音声入力エラー: ' + event.error);
-      };
-
-      rec.onend = () => {
-        if (addedText) {
-          setAppStatus(
-            '音声入力が終了しました。文章は残っています。続きを入力する場合はマイクを押してください。'
-          );
-        } else {
-          setAppStatus('音声入力が終了しました。');
-        }
-      };
-
-      try {
-        rec.start();
-        setAppStatus('音声入力中です。');
-      } catch (error) {
-        setAppStatus('音声入力を開始できませんでした。');
-      }
-    }
-
-    // -------------------------
-    // 音声読み上げ
-    // -------------------------
-
-    function updateSpeechButton() {
-      const button = document.getElementById('speech-toggle');
-
-      if (speechEnabled) {
-        button.textContent = '音声ON';
-        button.style.background = '#007aff';
-      } else {
-        button.textContent = '音声OFF';
-        button.style.background = '#666';
-      }
-    }
-
-    function toggleSpeech() {
-      speechEnabled = !speechEnabled;
-
-      updateSpeechButton();
-
-      if (!speechEnabled) {
-        window.speechSynthesis.cancel();
-      }
-    }
-
-    function speakText(text) {
-      if (!text) return;
-
-      lastSpeechText = text;
-
-      if (!speechEnabled) return;
-
-      window.speechSynthesis.cancel();
-
-      const speech = new SpeechSynthesisUtterance(text);
-      speech.lang = 'ja-JP';
-
-      window.speechSynthesis.speak(speech);
-    }
-
-    function playSpeech() {
-      if (!lastSpeechText) {
-        setAppStatus('再生する文章がありません。');
-        return;
-      }
-
-      if (!speechEnabled) {
-        speechEnabled = true;
-        updateSpeechButton();
-      }
-
-      speakText(lastSpeechText);
-    }
-
-    function pauseSpeech() {
-      window.speechSynthesis.pause();
-    }
-
-    function resumeSpeech() {
-      if (!speechEnabled) {
-        speechEnabled = true;
-        updateSpeechButton();
-      }
-
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      } else if (lastSpeechText) {
-        playSpeech();
-      }
-    }
-
-    function stopSpeech() {
-      window.speechSynthesis.cancel();
-    }
-
-    // -------------------------
-    // 画面表示
-    // -------------------------
-
-    function appendMessage(text, sender, metadata = null) {
-      const box = document.getElementById('chat-box');
-      const message = document.createElement('div');
-
-      message.className = `message ${sender}`;
-
-      if (sender === 'bot') {
-        const copyButton = document.createElement('button');
-        copyButton.className = 'message-copy-button';
-        copyButton.type = 'button';
-        copyButton.textContent = '回答をコピー';
-        copyButton.setAttribute('aria-label', 'AIの回答全体をコピー');
-        copyButton.addEventListener('click', () => {
-          copyCode(text, copyButton);
-        });
-
-        message.appendChild(copyButton);
-        renderBotMessage(message, text);
-
-        if (metadata && typeof metadata === 'object') {
-          const details = [];
-
-          if (metadata.modelId) {
-            const actualModel = metadata.modelVersion &&
-              metadata.modelVersion !== metadata.modelId
-              ? ` (${metadata.modelVersion})`
-              : '';
-            details.push(`モデル: ${metadata.modelId}${actualModel}`);
-          }
-
-          if (metadata.thinkingLevel) {
-            details.push(`思考設定: ${metadata.thinkingLevel}`);
-          }
-
-          if (Number.isFinite(metadata.elapsedMs)) {
-            details.push(
-              `API応答時間: ${(metadata.elapsedMs / 1000).toFixed(2)}秒`
-            );
-          }
-
-          const tokenDetails = [];
-
-          if (Number.isFinite(metadata.promptTokenCount)) {
-            tokenDetails.push(`入力 ${metadata.promptTokenCount.toLocaleString('ja-JP')}`);
-          }
-
-          if (Number.isFinite(metadata.candidatesTokenCount) && Number.isFinite(metadata.thoughtsTokenCount)) {
-            const billedOutputTokens = metadata.candidatesTokenCount + metadata.thoughtsTokenCount;
-            tokenDetails.push(`出力 ${billedOutputTokens.toLocaleString('ja-JP')}`);
-          }
-
-          if (tokenDetails.length > 0) {
-            details.push(`トークン: ${tokenDetails.join(' / ')}`);
-          }
-
-          if (Number.isFinite(metadata.estimatedCostUsd)) {
-            details.push(`推定費用: $${metadata.estimatedCostUsd.toFixed(6)}`);
-          }
-
-          if (details.length > 0) {
-            const metadataElement = document.createElement('div');
-            metadataElement.className = 'message-metadata';
-            metadataElement.textContent = details.join(' ｜ ');
-            message.appendChild(metadataElement);
-          }
-        }
-      } else {
-        message.textContent = text;
-      }
-
-      box.appendChild(message);
-      box.scrollTop = box.scrollHeight;
-
-      if (sender === 'bot') {
-        typesetMath(message);
-      }
-
-      if (sender === 'bot') {
-        lastSpeechText = text;
-      }
-    }
-
-    async function typesetMath(element) {
-      try {
-        if (!window.MathJax) return;
-
-        await window.MathJax.startup.promise;
-        await window.MathJax.typesetPromise([element]);
-      } catch (error) {
-        console.warn('数式の表示処理に失敗しました:', error);
-      }
-    }
-
-    // AI回答のコードフェンスを安全に専用枠へ変換する
-    function renderBotMessage(container, text) {
-      const codeFencePattern = /```([^\n`]*)\r?\n([\s\S]*?)```/g;
-      let lastIndex = 0;
-      let match;
-
-      while ((match = codeFencePattern.exec(text)) !== null) {
-        const normalText = text.slice(lastIndex, match.index);
-
-        if (normalText) {
-          const textPart = document.createElement('div');
-          textPart.className = 'message-text';
-          textPart.textContent = normalText;
-          container.appendChild(textPart);
-        }
-
-        const language = match[1].trim();
-        const codeText = match[2];
-
-        const codeBlock = document.createElement('div');
-        codeBlock.className = 'code-block';
-
-        const header = document.createElement('div');
-        header.className = 'code-block-header';
-
-        const languageLabel = document.createElement('span');
-        languageLabel.className = 'code-language';
-        languageLabel.textContent = language || 'コード';
-
-        const copyButton = document.createElement('button');
-        copyButton.className = 'code-copy-button';
-        copyButton.type = 'button';
-        copyButton.textContent = 'コピー';
-        copyButton.setAttribute('aria-label', 'このコードをコピー');
-
-        const pre = document.createElement('pre');
-        const code = document.createElement('code');
-        code.textContent = codeText;
-
-        copyButton.addEventListener('click', () => {
-          copyCode(codeText, copyButton);
-        });
-
-        header.appendChild(languageLabel);
-        header.appendChild(copyButton);
-        pre.appendChild(code);
-        codeBlock.appendChild(header);
-        codeBlock.appendChild(pre);
-        container.appendChild(codeBlock);
-
-        lastIndex = codeFencePattern.lastIndex;
-      }
-
-      const remainingText = text.slice(lastIndex);
-
-      if (remainingText) {
-        const textPart = document.createElement('div');
-        textPart.className = 'message-text';
-        textPart.textContent = remainingText;
-        container.appendChild(textPart);
-      }
-
-      if (!text) {
-        container.textContent = '';
-      }
-    }
-
-    // コードだけをコピーする
-    async function copyCode(codeText, button) {
-      const originalLabel = button.textContent;
-
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(codeText);
-        } else {
-          const temporaryInput = document.createElement('textarea');
-          temporaryInput.value = codeText;
-          temporaryInput.style.position = 'fixed';
-          temporaryInput.style.left = '-9999px';
-          temporaryInput.setAttribute('readonly', '');
-          document.body.appendChild(temporaryInput);
-          temporaryInput.select();
-
-          const copied = document.execCommand('copy');
-          temporaryInput.remove();
-
-          if (!copied) {
-            throw new Error('コピーできませんでした。');
-          }
-        }
-
-        button.textContent = 'コピー済み';
-        setAppStatus('コードをコピーしました。');
-        setTimeout(() => {
-          if (button.isConnected) {
-            button.textContent = originalLabel;
-          }
-        }, 1500);
-      } catch (error) {
-        button.textContent = originalLabel;
-        setAppStatus('コピーできませんでした。コードを選択してコピーしてください。');
-      }
-    }
-
-    // -------------------------
-    // Enterで送信、Shift+Enterで改行
-    // -------------------------
-
-    userInput.addEventListener('keydown', (event) => {
-      if (
-        event.key === 'Enter' &&
-        !event.shiftKey &&
-        !event.isComposing &&
-        event.keyCode !== 229
-      ) {
-        event.preventDefault();
-        sendMessage();
-      }
     });
 
-    // -------------------------
-    // 起動時の処理
-    // -------------------------
-
-    async function initialize() {
-      try {
-        await loadConfig();
-
-        const stored = localStorage.getItem(SESSION_KEY);
-
-        if (stored) {
-          try {
-            session = JSON.parse(stored);
-          } catch {
-            clearSession();
-          }
-        }
-
-        if (session?.refresh_token) {
-          if (session.expires_at < Date.now() + 60000) {
-            const refreshed = await refreshSession();
-
-            if (!refreshed) {
-              return;
-            }
-          }
-
-          try {
-            await enterApp();
-            return;
-          } catch {
-            clearSession();
-          }
-        }
-
-      } catch (error) {
-        setAuthStatus('初期設定エラー: ' + error.message);
-      }
-
-      document.getElementById('login-screen').style.display = 'flex';
-      document.getElementById('app').style.display = 'none';
+    function formatNumber(value) {
+      return Number.isFinite(value) ? value.toLocaleString('en-US') : '—';
     }
 
-    initialize();
-  </script>
+    function formatSeconds(ms) {
+      return Number.isFinite(ms) ? (ms / 1000).toFixed(1) + ' s' : '—';
+    }
 
+    function setStatus(message, isError = false) {
+      els.status.textContent = message;
+      els.status.classList.toggle('error', isError);
+    }
+
+    async function callDemo(useOS, message, code) {
+      const response = await fetch('/api/demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, message, useOS })
+      });
+
+      const raw = await response.text();
+      let data = {};
+
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error('The server returned an unreadable response.');
+      }
+
+      if (!response.ok) {
+        const error = new Error(data.error || `Request failed (${response.status}).`);
+        error.status = response.status;
+        throw error;
+      }
+
+      return data;
+    }
+
+    function renderMetrics(table, metrics) {
+      table.innerHTML = '';
+
+      if (!metrics) return;
+
+      const totals = metrics.totals || {};
+      const calls = Array.isArray(metrics.calls) ? metrics.calls : [];
+      const callLabel = calls.length > 1
+        ? `${calls.length} (${calls.map(call => call.call).join(' + ')})`
+        : String(calls.length);
+
+      const rows = [
+        ['Model', metrics.modelVersion || metrics.model],
+        ['Thinking level', metrics.thinkingLevel],
+        ['API calls', callLabel],
+        ['Input tokens', formatNumber(totals.inputTokens)],
+        ['Cached input tokens', formatNumber(totals.cachedInputTokens)],
+        ['Output tokens (excl. thinking)', formatNumber(totals.outputTokens)],
+        ['Thinking tokens', formatNumber(totals.thinkingTokens)],
+        ['Total tokens', formatNumber(totals.totalTokens), true],
+        ['Time', formatSeconds(totals.timeMs)]
+      ];
+
+      for (const [label, value, isTotal] of rows) {
+        const tr = document.createElement('tr');
+
+        if (isTotal) tr.className = 'total';
+
+        const left = document.createElement('td');
+        left.textContent = label;
+
+        const right = document.createElement('td');
+        right.textContent = value ?? '—';
+
+        tr.append(left, right);
+        table.appendChild(tr);
+      }
+    }
+
+    function showResult(answerEl, metricsEl, result) {
+      answerEl.className = 'answer';
+      answerEl.textContent = result.reply;
+      renderMetrics(metricsEl, result.metrics);
+    }
+
+    function showFailure(answerEl, metricsEl, error) {
+      answerEl.className = 'answer error';
+      answerEl.textContent = error.message;
+      metricsEl.innerHTML = '';
+    }
+
+    function setWorking(answerEl, metricsEl) {
+      answerEl.className = 'answer placeholder';
+      answerEl.textContent = 'Working…';
+      metricsEl.innerHTML = '';
+    }
+
+    function buildTextSummary(run) {
+      const lines = [];
+
+      lines.push('Masato AI — Evaluation Demo');
+      lines.push(`Time: ${run.timestamp}`);
+      lines.push('');
+      lines.push('Question:');
+      lines.push(run.question);
+
+      const sections = [
+        ['With Masato OS', run.withOS],
+        ['Baseline (no OS)', run.baseline]
+      ];
+
+      for (const [title, part] of sections) {
+        lines.push('');
+        lines.push(`=== ${title} ===`);
+
+        if (!part || part.error) {
+          lines.push(`Error: ${part?.error || 'no result'}`);
+          continue;
+        }
+
+        const totals = part.metrics?.totals || {};
+
+        lines.push(part.reply);
+        lines.push('');
+        lines.push(
+          `Input ${formatNumber(totals.inputTokens)} | ` +
+          `Output ${formatNumber(totals.outputTokens)} | ` +
+          `Thinking ${formatNumber(totals.thinkingTokens)} | ` +
+          `Total ${formatNumber(totals.totalTokens)} | ` +
+          `Time ${formatSeconds(totals.timeMs)} | ` +
+          `API calls ${part.metrics?.calls?.length ?? '—'}`
+        );
+      }
+
+      return lines.join('\n');
+    }
+
+    async function copyToClipboard(text, label) {
+      try {
+        await navigator.clipboard.writeText(text);
+        els.exportStatus.textContent = `${label} copied.`;
+      } catch {
+        els.exportStatus.textContent = 'Copy failed. Please select the text and copy it manually.';
+      }
+
+      setTimeout(() => {
+        els.exportStatus.textContent = '';
+      }, 4000);
+    }
+
+    els.copyJson.addEventListener('click', () => {
+      if (lastRun) copyToClipboard(JSON.stringify(lastRun, null, 2), 'JSON');
+    });
+
+    els.copyText.addEventListener('click', () => {
+      if (lastRun) copyToClipboard(buildTextSummary(lastRun), 'Text');
+    });
+
+    async function runBoth() {
+      const code = els.code.value.trim();
+      const message = els.question.value.trim();
+
+      if (!code) {
+        setStatus('Please enter the access code.', true);
+        return;
+      }
+
+      if (!message) {
+        setStatus('Please enter a question.', true);
+        return;
+      }
+
+      try {
+        sessionStorage.setItem('demo_access_code', code);
+      } catch {
+        // 保存できなくても、そのまま続ける
+      }
+
+      els.run.disabled = true;
+      els.copyJson.disabled = true;
+      els.copyText.disabled = true;
+      setStatus('Running both versions in parallel…');
+      setWorking(els.answerOs, els.metricsOs);
+      setWorking(els.answerBase, els.metricsBase);
+
+      const [osResult, baseResult] = await Promise.allSettled([
+        callDemo(true, message, code),
+        callDemo(false, message, code)
+      ]);
+
+      const wrongCode = [osResult, baseResult].some(
+        result => result.status === 'rejected' && result.reason?.status === 401
+      );
+
+      if (osResult.status === 'fulfilled') {
+        showResult(els.answerOs, els.metricsOs, osResult.value);
+      } else {
+        showFailure(els.answerOs, els.metricsOs, osResult.reason);
+      }
+
+      if (baseResult.status === 'fulfilled') {
+        showResult(els.answerBase, els.metricsBase, baseResult.value);
+      } else {
+        showFailure(els.answerBase, els.metricsBase, baseResult.reason);
+      }
+
+      lastRun = {
+        timestamp: new Date().toISOString(),
+        question: message,
+        settings: {
+          model: 'gemini-3.8-flash',
+          thinkingLevel: 'LOW',
+          history: 'none (each run is independent)'
+        },
+        withOS: osResult.status === 'fulfilled'
+          ? osResult.value
+          : { error: osResult.reason.message },
+        baseline: baseResult.status === 'fulfilled'
+          ? baseResult.value
+          : { error: baseResult.reason.message }
+      };
+
+      const anySuccess =
+        osResult.status === 'fulfilled' || baseResult.status === 'fulfilled';
+
+      els.copyJson.disabled = !anySuccess;
+      els.copyText.disabled = !anySuccess;
+      els.run.disabled = false;
+
+      if (wrongCode) {
+        setStatus('The access code was not accepted.', true);
+      } else if (osResult.status === 'rejected' || baseResult.status === 'rejected') {
+        setStatus('Finished, but one of the two runs failed.', true);
+      } else {
+        setStatus('Done.');
+      }
+    }
+
+    els.run.addEventListener('click', runBoth);
+
+    els.question.addEventListener('keydown', event => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        runBoth();
+      }
+    });
+  </script>
 </body>
 </html>
