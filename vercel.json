@@ -1,12 +1,9 @@
+
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/chat.js": {
       "includeFiles": "prompts/**"
-    },
-    "api/demo.js": {
-      "includeFiles": "prompts/**"
     }
   }
 }
-
