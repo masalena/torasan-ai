@@ -57,8 +57,11 @@ function safeEqual(a, b) {
 
 // 最初の見出し(または最初の項目名の位置)をこの名前にする。
 // 途中の見出しは消し(中身は1つにまとまる)、最後の見出しは FINAL_HEADING にする。
-const CHECKPOINT_HEADING = '●チェックポイント';
-const FINAL_HEADING = '●まとめ';
+const HEADINGS_JA = { checkpoint: '●チェックポイント', final: '●まとめ' };
+const HEADINGS_EN = { checkpoint: '●Checkpoints', final: '●Summary' };
+
+// 質問に日本語(ひらがな・カタカナ・漢字)が含まれるか。含まれなければ、英語の見出しにする。
+const JAPANESE_RE = /[\u3040-\u30ff\u3400-\u9fff]/;
 
 // チェックポイントの部分で、行頭にあれば取り除く【】のタグ(見出しとは扱わない)
 const BRACKET_TAGS = ['根', '幹', '枝', '事実', '推論'];
@@ -68,7 +71,7 @@ const BULLET_CHARS = '・･•·●○◦‣∙▪\\-*';
 const BULLET_RE = new RegExp(`^\\s*[${BULLET_CHARS}]\\s*`);
 
 // B の形で、最後の見出しとみなす言葉
-const FINAL_WORDS = /まとめ|結論/;
+const FINAL_WORDS = /まとめ|結論|summary|conclusion|bottom line/i;
 
 // B の形で、最後に見出しがない回答は、項目名にこれらの言葉が含まれるときだけ対象にする
 // (普通の回答の「・メリット：」などを巻き込まないため)。足りない言葉があれば、ここに足す。
@@ -166,7 +169,7 @@ function stripLabel(line) {
 }
 
 // A の形: 見出しが3つ以上ある回答
-function tidyHeadedAnswer(lines, headings) {
+function tidyHeadedAnswer(lines, headings, names) {
   const first = headings[0];
   const last = headings[headings.length - 1];
   const middle = new Set(headings.slice(1, -1));
@@ -175,7 +178,7 @@ function tidyHeadedAnswer(lines, headings) {
 
   lines.forEach((line, index) => {
     if (index === first) {
-      result.push(CHECKPOINT_HEADING);
+      result.push(names.checkpoint);
       return;
     }
 
@@ -184,7 +187,7 @@ function tidyHeadedAnswer(lines, headings) {
     }
 
     if (index === last) {
-      result.push(FINAL_HEADING);
+      result.push(names.final);
       return;
     }
 
@@ -229,7 +232,7 @@ function tidyHeadedAnswer(lines, headings) {
 // 項目名の行を消して、内容の行を箇条書きにする。最初の項目名の位置に、チェックポイントの見出しを入れる。
 // 最後に「まとめ」「結論」の見出しがあれば FINAL_HEADING にし、なければ、項目の部分が終わったあとの文章の前に入れる。
 // 該当しなければ null を返す。
-function tidyLabelBlocks(lines) {
+function tidyLabelBlocks(lines, names) {
   let finalIndex = -1;
 
   lines.forEach((line, index) => {
@@ -293,12 +296,12 @@ function tidyLabelBlocks(lines) {
 
     if (index >= regionEnd) {
       if (index === finalIndex) {
-        result.push(FINAL_HEADING);
+        result.push(names.final);
         return;
       }
 
       if (index === headingAt) {
-        result.push(FINAL_HEADING);
+        result.push(names.final);
       }
 
       result.push(line);
@@ -307,7 +310,7 @@ function tidyLabelBlocks(lines) {
 
     if (LABEL_ONLY_PATTERN.test(line)) {
       if (index === first) {
-        result.push(CHECKPOINT_HEADING);
+        result.push(names.checkpoint);
       }
 
       pendingBullet = true;
@@ -350,11 +353,12 @@ function tidyLabelBlocks(lines) {
   return result.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function tidyAnswer(text) {
+function tidyAnswer(text, isJapanese) {
   if (typeof text !== 'string' || !text) {
     return text;
   }
 
+  const names = isJapanese ? HEADINGS_JA : HEADINGS_EN;
   const lines = removeCaseNumbers(text).split('\n');
   const headings = [];
 
@@ -365,10 +369,10 @@ function tidyAnswer(text) {
   });
 
   if (headings.length >= 3) {
-    return tidyHeadedAnswer(lines, headings);
+    return tidyHeadedAnswer(lines, headings, names);
   }
 
-  const labelBlocks = tidyLabelBlocks(lines);
+  const labelBlocks = tidyLabelBlocks(lines, names);
 
   return labelBlocks !== null ? labelBlocks : lines.join('\n');
 }
@@ -548,7 +552,9 @@ export default async function handler(req, res) {
     }
 
     const rawText = getText(answer.content);
-    const reply = useOS && HIDE_LABELS ? tidyAnswer(rawText) : rawText;
+    const reply = useOS && HIDE_LABELS
+      ? tidyAnswer(rawText, JAPANESE_RE.test(message))
+      : rawText;
 
     return res.status(200).json({
       mode: useOS ? 'with_os' : 'baseline',
