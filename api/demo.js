@@ -20,6 +20,13 @@ const HIDE_LABELS = true;
 const LANGUAGE_RULE =
   "Reply in the same language as the user's latest message.";
 
+// OSありの側の質問の末尾に足す、言語の指示。
+// システム指示や履歴が日本語でも、最後に読む質問の末尾に置くことで、言語が引っ張られにくくする。
+const USER_LANGUAGE_SUFFIX =
+  '\n\n(Write your entire answer in the same language as the question above, ' +
+  'including all headings and labels. ' +
+  'If the question is in English, answer fully in English.)';
+
 function readPrompt(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
@@ -491,7 +498,15 @@ export default async function handler(req, res) {
   }
 
   const useOS = body.useOS !== false;
+
+  // OSなしの側に送る質問(何も足さない)
   const userMessage = { role: 'user', parts: [{ text: message }] };
+
+  // OSありの側に送る質問(末尾に、言語をそろえる指示を足す)
+  const osUserMessage = {
+    role: 'user',
+    parts: [{ text: message + USER_LANGUAGE_SUFFIX }]
+  };
 
   try {
     const calls = [];
@@ -519,7 +534,7 @@ export default async function handler(req, res) {
 
       answer = await callGemini({
         systemText,
-        contents: [initialMessage, setup.content, userMessage]
+        contents: [initialMessage, setup.content, osUserMessage]
       });
 
       calls.push(summarizeCall('answer', answer));
