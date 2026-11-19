@@ -27,6 +27,12 @@ const USER_LANGUAGE_SUFFIX =
   'including all headings and labels. ' +
   'If the question is in English, answer fully in English.)';
 
+// 自分用の画面では、最初のメッセージ(追加プロトコル)に対するAIの返事が、会話の履歴に入っている。
+// デモでは、その返事を毎回もらい直すのをやめて、この固定の返事を履歴に入れる。
+// そのため、質問1回につき、AIの呼び出しは1回だけになる。
+// 自分用の会話の一番最初のAIの返事に近い文章に、書き換えてもよい。
+const SETUP_REPLY = 'Understood.';
+
 function readPrompt(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
@@ -523,22 +529,18 @@ export default async function handler(req, res) {
 
       const systemText = corePrompt + '\n\n' + LANGUAGE_RULE;
 
-      // 自分用の画面と同じ作り方: 最初に追加プロトコルを送って、AIの返事をもらう
+      // 自分用の画面と同じ並び: 最初に追加プロトコル、AIの返事、そのあとに質問
       const initialMessage = {
         role: 'user',
         parts: [{ text: dualModePrompt + '\n\n' + referencePrompt }]
       };
 
-      const setup = await callGemini({
-        systemText,
-        contents: [initialMessage]
-      });
-
-      calls.push(summarizeCall('setup', setup));
+      // AIの返事は、毎回もらい直さず、固定の返事を入れる(呼び出しを1回にするため)
+      const setupReply = { role: 'model', parts: [{ text: SETUP_REPLY }] };
 
       answer = await callGemini({
         systemText,
-        contents: [initialMessage, setup.content, osUserMessage]
+        contents: [initialMessage, setupReply, osUserMessage]
       });
 
       calls.push(summarizeCall('answer', answer));
