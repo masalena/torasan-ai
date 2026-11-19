@@ -1,640 +1,319 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Masato AI — Evaluation Demo</title>
-
-  <style>
-    * {
-      box-sizing: border-box;
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Masato AI — Evaluation Demo</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --text: #1d2430;
+    --muted: #5d6675;
+    --line: #d9dde4;
+    --base: #6b7380;
+    --os: #1f5f8b;
+    --os-soft: #e8f1f7;
+    --error: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c;
+      --surface: #1c2027;
+      --text: #e6e9ee;
+      --muted: #9aa3b2;
+      --line: #313743;
+      --base: #9aa3b2;
+      --os: #6fb3e0;
+      --os-soft: #1b2a36;
+      --error: #f2a29c;
     }
-
-    body {
-      margin: 0;
-      background: #121212;
-      color: #f2f2f2;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.6;
-    }
-
-    .page {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 20px 16px 48px;
-    }
-
-    h1 {
-      margin: 0 0 4px;
-      font-size: 1.5rem;
-    }
-
-    .subtitle {
-      margin: 0 0 18px;
-      color: #b5b5b5;
-      font-size: 0.95rem;
-    }
-
-    .panel {
-      background: #1b1b1b;
-      border: 1px solid #333;
-      border-radius: 12px;
-      padding: 14px;
-      margin-bottom: 14px;
-    }
-
-    .settings {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px 18px;
-      color: #c8c8c8;
-      font-size: 0.85rem;
-    }
-
-    .settings strong {
-      color: #fff;
-      font-weight: 600;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 6px;
-      color: #d0d0d0;
-      font-size: 0.9rem;
-    }
-
-    input,
-    textarea {
-      width: 100%;
-      padding: 11px 12px;
-      border: 1px solid #3a3a3a;
-      border-radius: 8px;
-      background: #252525;
-      color: #fff;
-      font-size: 16px;
-      font-family: inherit;
-    }
-
-    textarea {
-      min-height: 130px;
-      resize: vertical;
-      line-height: 1.5;
-    }
-
-    button {
-      padding: 10px 16px;
-      border: none;
-      border-radius: 8px;
-      background: #3a3a3a;
-      color: #fff;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    button:hover:not(:disabled) {
-      background: #4d4d4d;
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    #run-button {
-      background: #1a73e8;
-      font-size: 15px;
-      padding: 12px 22px;
-    }
-
-    #run-button:hover:not(:disabled) {
-      background: #3b8bf0;
-    }
-
-    .samples {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 10px 0 14px;
-    }
-
-    .samples span {
-      width: 100%;
-      color: #9a9a9a;
-      font-size: 0.8rem;
-    }
-
-    .samples button {
-      padding: 7px 11px;
-      font-size: 13px;
-      background: #2a2a2a;
-      border: 1px solid #3c3c3c;
-    }
-
-    .run-row {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    #status {
-      color: #bdbdbd;
-      font-size: 0.9rem;
-    }
-
-    #status.error {
-      color: #ff8a80;
-    }
-
-    .results {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }
-
-    .card {
-      min-width: 0;
-      background: #1b1b1b;
-      border: 1px solid #333;
-      border-radius: 12px;
-      padding: 14px;
-    }
-
-    .card.os {
-      border-color: #2e5e9e;
-    }
-
-    .card h2 {
-      margin: 0 0 2px;
-      font-size: 1.05rem;
-    }
-
-    .card .caption {
-      margin: 0 0 10px;
-      color: #9a9a9a;
-      font-size: 0.8rem;
-    }
-
-    .answer {
-      min-height: 80px;
-      padding: 12px;
-      border-radius: 8px;
-      background: #232323;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      font-size: 0.97rem;
-    }
-
-    .answer.placeholder {
-      color: #7d7d7d;
-    }
-
-    .answer.error {
-      color: #ff8a80;
-    }
-
-    table.metrics {
-      width: 100%;
-      margin-top: 12px;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-    }
-
-    table.metrics td {
-      padding: 5px 4px;
-      border-top: 1px solid #2c2c2c;
-    }
-
-    table.metrics td:last-child {
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
-    table.metrics tr.total td {
-      font-weight: 600;
-      color: #fff;
-    }
-
-    table.metrics td:first-child {
-      color: #bdbdbd;
-    }
-
-    .export-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    #export-status {
-      color: #9fd3a6;
-      font-size: 0.85rem;
-    }
-
-    .notes {
-      margin-top: 18px;
-      color: #9a9a9a;
-      font-size: 0.8rem;
-      line-height: 1.7;
-    }
-
-    .notes p {
-      margin: 0 0 6px;
-    }
-
-    @media (max-width: 800px) {
-      .results {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.6;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 20px; max-width: 62ch; }
+  label { display: block; font-weight: 600; margin: 0 0 6px; }
+  input, textarea {
+    width: 100%;
+    font: inherit;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  textarea { min-height: 120px; resize: vertical; }
+  input:focus-visible, textarea:focus-visible, button:focus-visible {
+    outline: 2px solid var(--os);
+    outline-offset: 2px;
+  }
+  .field { margin-bottom: 16px; }
+  .code-field { max-width: 320px; }
+  .samples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .samples span { color: var(--muted); align-self: center; }
+  button {
+    font: inherit;
+    cursor: pointer;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    padding: 8px 14px;
+  }
+  button.primary {
+    background: var(--os);
+    border-color: var(--os);
+    color: #fff;
+    font-weight: 600;
+    padding: 10px 22px;
+  }
+  @media (prefers-color-scheme: dark) { button.primary { color: #0d1620; } }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+  .status { min-height: 1.6em; margin: 12px 0 0; color: var(--muted); }
+  .status.error { color: var(--error); }
+  .results { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+  @media (max-width: 760px) { .results { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--base);
+    border-radius: 6px;
+    padding: 14px 16px;
+    min-width: 0;
+  }
+  .panel.os { border-top-color: var(--os); }
+  .panel h2 { font-size: 1.05rem; margin: 0 0 2px; }
+  .panel .sub { color: var(--muted); font-size: 0.88rem; margin: 0 0 12px; }
+  .answer { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 4em; }
+  .answer.empty { color: var(--muted); }
+  .metrics {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--os-soft);
+    font-size: 0.88rem;
+  }
+  .panel:not(.os) .metrics { background: var(--bg); }
+  .metrics table { width: 100%; border-collapse: collapse; }
+  .metrics th, .metrics td { text-align: left; padding: 2px 8px 2px 0; font-weight: normal; }
+  .metrics .head th { color: var(--muted); border-bottom: 1px solid var(--line); }
+  .metrics .total td { font-weight: 600; border-top: 1px solid var(--line); }
+  .metrics .meta { color: var(--muted); margin-top: 6px; }
+  .table-wrap { overflow-x: auto; }
+  .copy-row { margin-top: 12px; }
+  [hidden] { display: none !important; }
+</style>
 </head>
-
 <body>
-  <div class="page">
+<main>
+  <h1>Masato AI — Evaluation Demo</h1>
+  <p class="lead">Ask one question and compare two answers from the same model: one without the Masato OS, and one with it. Each question is answered once, with no chat history.</p>
 
-    <h1>Masato AI — Evaluation Demo</h1>
-    <p class="subtitle">
-      The same model, the same settings — answered once with the Masato OS and once without it.
-    </p>
-
-    <div class="panel settings">
-      <span>Model: <strong>Gemini 3.8 Flash</strong></span>
-      <span>Thinking level: <strong>Low</strong></span>
-      <span>Each run is independent: <strong>no conversation history</strong></span>
-    </div>
-
-    <div class="panel">
-      <label for="code">Access code</label>
-      <input
-        id="code"
-        type="password"
-        autocomplete="off"
-        placeholder="Enter the access code you were given"
-      >
-    </div>
-
-    <div class="panel">
-      <label for="question">Your question</label>
-      <textarea
-        id="question"
-        placeholder="Type a question in English or Japanese."
-      ></textarea>
-
-      <div class="samples">
-        <span>Sample questions (click to fill in):</span>
-        <button type="button" data-sample="missing">Missing information</button>
-        <button type="button" data-sample="logic">Logic puzzle</button>
-        <button type="button" data-sample="alien">Pattern inference</button>
-        <button type="button" data-sample="life">Everyday dilemma</button>
-      </div>
-
-      <div class="run-row">
-        <button id="run-button" type="button">Run both</button>
-        <span id="status"></span>
-      </div>
-    </div>
-
-    <div class="results">
-      <article class="card os" id="card-os">
-        <h2>With Masato OS</h2>
-        <p class="caption">Gemini 3.8 Flash (Low) + the Masato OS</p>
-        <div class="answer placeholder" id="answer-os">The answer will appear here.</div>
-        <table class="metrics" id="metrics-os"></table>
-      </article>
-
-      <article class="card" id="card-base">
-        <h2>Baseline (no OS)</h2>
-        <p class="caption">Gemini 3.8 Flash (Low), nothing added</p>
-        <div class="answer placeholder" id="answer-base">The answer will appear here.</div>
-        <table class="metrics" id="metrics-base"></table>
-      </article>
-    </div>
-
-    <div class="export-row">
-      <button id="copy-json" type="button" disabled>Copy results (JSON)</button>
-      <button id="copy-text" type="button" disabled>Copy results (text)</button>
-      <span id="export-status"></span>
-    </div>
-
-    <div class="notes">
-      <p>
-        Token counts come from the model API. "Thinking tokens" are the model's internal reasoning
-        and are billed as output. The "Masato OS" side makes two API calls per question
-        (a short setup call, then the answer); the table shows both, and the totals include both.
-      </p>
-      <p>
-        On the "With Masato OS" side, one sentence is appended to the system instruction so the
-        answer follows the language of the question. It is recorded in the copied JSON.
-      </p>
-      <p>
-        This demo does not save your questions or answers on its own server. Requests are processed
-        through the Google Gemini API; please see Google's terms for how API data is handled.
-      </p>
-    </div>
-
+  <div class="field code-field">
+    <label for="code">Access code</label>
+    <input id="code" type="password" autocomplete="off" placeholder="Enter your access code">
   </div>
 
-  <script>
-    const SAMPLES = {
-      missing:
-        'A cylindrical glass with a diameter of 10 cm contains water to a depth of 5 cm. ' +
-        'The glass is tilted slowly, without spilling any water, until the water surface just reaches the rim. ' +
-        'What is the exact geometric shape of the water surface in contact with the glass, ' +
-        'and what is the tilt angle at that moment (the angle between the base of the glass and the horizontal plane)?',
+  <div class="field">
+    <label for="question">Question</label>
+    <div class="samples">
+      <span>Try a sample:</span>
+      <button type="button" id="sample1">Tilted glass</button>
+      <button type="button" id="sample2">Cars in a row</button>
+    </div>
+    <textarea id="question" maxlength="4000" placeholder="Type your question here (up to 4,000 characters)"></textarea>
+  </div>
 
-      logic:
-        'Five cars, P, Q, R, S and T, are parked in a single row. ' +
-        'Q is immediately to the right of P. R is immediately to the left of S. ' +
-        'T is to the left of P, but to the right of R. ' +
-        'Give the position of every car from left to right.',
+  <button type="button" class="primary" id="run">Compare answers</button>
+  <p class="status" id="status" role="status"></p>
 
-      alien:
-        'Infer the translation rules from the examples, then answer the last question. ' +
-        'Rule 1: [ZOR-7] + [KIL-2] -> "A blue flame burns". ' +
-        'Rule 2: [ZOR-4] + [MIP-5] -> "A blue wind blows". ' +
-        'Rule 3: [LUN-7] + [KIL-2] -> "A red flame burns". ' +
-        'What does [LUN-4] + [MIP-3] mean? Explain your reasoning, including which part of the code means what.',
+  <div class="results">
+    <section class="panel" id="panel-base">
+      <h2>Without OS</h2>
+      <p class="sub">The model alone, no system instructions.</p>
+      <div class="answer empty" id="answer-base">The answer will appear here.</div>
+      <div class="metrics" id="metrics-base" hidden></div>
+      <div class="copy-row"><button type="button" id="copy-base" hidden>Copy result</button></div>
+    </section>
+    <section class="panel os" id="panel-os">
+      <h2>With OS</h2>
+      <p class="sub">The same model with the Masato OS.</p>
+      <div class="answer empty" id="answer-os">The answer will appear here.</div>
+      <div class="metrics" id="metrics-os" hidden></div>
+      <div class="copy-row"><button type="button" id="copy-os" hidden>Copy result</button></div>
+    </section>
+  </div>
+</main>
 
-      life:
-        'I am a stay-at-home parent and I am exhausted from childcare and housework. ' +
-        'My partner does not help at all, even when I ask. What should I do?'
-    };
+<script>
+  // Sample questions: edit the text here to change them.
+  var SAMPLES = {
+    sample1: "A glass of water is sitting on a table. I slowly tilt the glass. Before the water spills, what exactly changes inside the glass, and what decides the moment it starts to spill?",
+    sample2: "Five cars are parked in a row: red, blue, green, white and black. The red car is not at either end. The blue car is right next to the green car. The white car is somewhere to the left of the black car. How many different arrangements are possible?"
+  };
 
-    const els = {
-      code: document.getElementById('code'),
-      question: document.getElementById('question'),
-      run: document.getElementById('run-button'),
-      status: document.getElementById('status'),
-      answerOs: document.getElementById('answer-os'),
-      answerBase: document.getElementById('answer-base'),
-      metricsOs: document.getElementById('metrics-os'),
-      metricsBase: document.getElementById('metrics-base'),
-      copyJson: document.getElementById('copy-json'),
-      copyText: document.getElementById('copy-text'),
-      exportStatus: document.getElementById('export-status')
-    };
+  var els = {
+    code: document.getElementById('code'),
+    question: document.getElementById('question'),
+    run: document.getElementById('run'),
+    status: document.getElementById('status')
+  };
+  var lastResult = { base: null, os: null };
 
-    let lastRun = null;
+  document.getElementById('sample1').addEventListener('click', function () { els.question.value = SAMPLES.sample1; });
+  document.getElementById('sample2').addEventListener('click', function () { els.question.value = SAMPLES.sample2; });
 
-    // 合言葉は、このタブを閉じるまでだけ覚える
-    try {
-      els.code.value = sessionStorage.getItem('demo_access_code') || '';
-    } catch {
-      els.code.value = '';
-    }
+  function setStatus(text, isError) {
+    els.status.textContent = text;
+    els.status.className = 'status' + (isError ? ' error' : '');
+  }
 
-    document.querySelectorAll('[data-sample]').forEach(button => {
-      button.addEventListener('click', () => {
-        els.question.value = SAMPLES[button.dataset.sample] || '';
-        els.question.focus();
-      });
-    });
+  function formatSeconds(ms) { return (ms / 1000).toFixed(1) + ' s'; }
+  function formatNumber(n) { return Number(n || 0).toLocaleString('en-US'); }
 
-    function formatNumber(value) {
-      return Number.isFinite(value) ? value.toLocaleString('en-US') : '—';
-    }
-
-    function formatSeconds(ms) {
-      return Number.isFinite(ms) ? (ms / 1000).toFixed(1) + ' s' : '—';
-    }
-
-    function setStatus(message, isError = false) {
-      els.status.textContent = message;
-      els.status.classList.toggle('error', isError);
-    }
-
-    async function callDemo(useOS, message, code) {
-      const response = await fetch('/api/demo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, message, useOS })
-      });
-
-      const raw = await response.text();
-      let data = {};
-
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        throw new Error('The server returned an unreadable response.');
-      }
-
-      if (!response.ok) {
-        const error = new Error(data.error || `Request failed (${response.status}).`);
-        error.status = response.status;
-        throw error;
-      }
-
-      return data;
-    }
-
-    function renderMetrics(table, metrics) {
-      table.innerHTML = '';
-
-      if (!metrics) return;
-
-      const totals = metrics.totals || {};
-      const calls = Array.isArray(metrics.calls) ? metrics.calls : [];
-      const callLabel = calls.length > 1
-        ? `${calls.length} (${calls.map(call => call.call).join(' + ')})`
-        : String(calls.length);
-
-      const rows = [
-        ['Model', metrics.modelVersion || metrics.model],
-        ['Thinking level', metrics.thinkingLevel],
-        ['API calls', callLabel],
-        ['Input tokens', formatNumber(totals.inputTokens)],
-        ['Cached input tokens', formatNumber(totals.cachedInputTokens)],
-        ['Output tokens (excl. thinking)', formatNumber(totals.outputTokens)],
-        ['Thinking tokens', formatNumber(totals.thinkingTokens)],
-        ['Total tokens', formatNumber(totals.totalTokens), true],
-        ['Time', formatSeconds(totals.timeMs)]
-      ];
-
-      for (const [label, value, isTotal] of rows) {
-        const tr = document.createElement('tr');
-
-        if (isTotal) tr.className = 'total';
-
-        const left = document.createElement('td');
-        left.textContent = label;
-
-        const right = document.createElement('td');
-        right.textContent = value ?? '—';
-
-        tr.append(left, right);
-        table.appendChild(tr);
-      }
-    }
-
-    function showResult(answerEl, metricsEl, result) {
-      answerEl.className = 'answer';
-      answerEl.textContent = result.reply;
-      renderMetrics(metricsEl, result.metrics);
-    }
-
-    function showFailure(answerEl, metricsEl, error) {
-      answerEl.className = 'answer error';
-      answerEl.textContent = error.message;
-      metricsEl.innerHTML = '';
-    }
-
-    function setWorking(answerEl, metricsEl) {
-      answerEl.className = 'answer placeholder';
-      answerEl.textContent = 'Working…';
-      metricsEl.innerHTML = '';
-    }
-
-    function buildTextSummary(run) {
-      const lines = [];
-
-      lines.push('Masato AI — Evaluation Demo');
-      lines.push(`Time: ${run.timestamp}`);
-      lines.push('');
-      lines.push('Question:');
-      lines.push(run.question);
-
-      const sections = [
-        ['With Masato OS', run.withOS],
-        ['Baseline (no OS)', run.baseline]
-      ];
-
-      for (const [title, part] of sections) {
-        lines.push('');
-        lines.push(`=== ${title} ===`);
-
-        if (!part || part.error) {
-          lines.push(`Error: ${part?.error || 'no result'}`);
-          continue;
+  function ask(useOS) {
+    return fetch('/api/demo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: els.code.value, message: els.question.value, useOS: useOS })
+    }).then(function (response) {
+      return response.text().then(function (raw) {
+        var data = null;
+        try { data = raw ? JSON.parse(raw) : null; } catch (e) { data = null; }
+        if (!response.ok || !data) {
+          var message = (data && data.error) || ('The server returned an error (' + response.status + '). If it took very long, try again.');
+          throw new Error(message);
         }
+        return data;
+      });
+    });
+  }
 
-        const totals = part.metrics?.totals || {};
+  function buildMetricsText(data) {
+    var m = data.metrics, t = m.totals;
+    var lines = [
+      'Model: ' + (m.modelVersion || m.model) + ' (thinking: ' + m.thinkingLevel + ')'
+    ];
+    m.calls.forEach(function (c) {
+      lines.push(c.call + ': input ' + c.inputTokens + ', output ' + c.outputTokens + ', thinking ' + c.thinkingTokens + ', total ' + c.totalTokens + ', ' + formatSeconds(c.timeMs));
+    });
+    lines.push('Total: input ' + t.inputTokens + ', output ' + t.outputTokens + ', thinking ' + t.thinkingTokens + ', total ' + t.totalTokens + ', ' + formatSeconds(t.timeMs));
+    if (m.systemInstructionAddendum) lines.push('Added to system instructions: ' + m.systemInstructionAddendum);
+    return lines.join('\n');
+  }
 
-        lines.push(part.reply);
-        lines.push('');
-        lines.push(
-          `Input ${formatNumber(totals.inputTokens)} | ` +
-          `Output ${formatNumber(totals.outputTokens)} | ` +
-          `Thinking ${formatNumber(totals.thinkingTokens)} | ` +
-          `Total ${formatNumber(totals.totalTokens)} | ` +
-          `Time ${formatSeconds(totals.timeMs)} | ` +
-          `API calls ${part.metrics?.calls?.length ?? '—'}`
-        );
-      }
+  function renderMetrics(box, data) {
+    var m = data.metrics, t = m.totals;
+    box.textContent = '';
 
-      return lines.join('\n');
+    var wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    var table = document.createElement('table');
+
+    function row(cls, cells, tag) {
+      var tr = document.createElement('tr');
+      if (cls) tr.className = cls;
+      cells.forEach(function (text) {
+        var cell = document.createElement(tag || 'td');
+        cell.textContent = text;
+        tr.appendChild(cell);
+      });
+      table.appendChild(tr);
     }
 
-    async function copyToClipboard(text, label) {
-      try {
-        await navigator.clipboard.writeText(text);
-        els.exportStatus.textContent = `${label} copied.`;
-      } catch {
-        els.exportStatus.textContent = 'Copy failed. Please select the text and copy it manually.';
-      }
-
-      setTimeout(() => {
-        els.exportStatus.textContent = '';
-      }, 4000);
+    row('head', ['Call', 'Input', 'Output', 'Thinking', 'Time'], 'th');
+    m.calls.forEach(function (c) {
+      row('', [c.call, formatNumber(c.inputTokens), formatNumber(c.outputTokens), formatNumber(c.thinkingTokens), formatSeconds(c.timeMs)]);
+    });
+    if (m.calls.length > 1) {
+      row('total', ['Total', formatNumber(t.inputTokens), formatNumber(t.outputTokens), formatNumber(t.thinkingTokens), formatSeconds(t.timeMs)]);
     }
+    wrap.appendChild(table);
+    box.appendChild(wrap);
 
-    els.copyJson.addEventListener('click', () => {
-      if (lastRun) copyToClipboard(JSON.stringify(lastRun, null, 2), 'JSON');
+    var meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = 'Model: ' + (m.modelVersion || m.model) + ' · Thinking: ' + m.thinkingLevel;
+    box.appendChild(meta);
+    box.hidden = false;
+  }
+
+  function showResult(key, data) {
+    var answerEl = document.getElementById('answer-' + key);
+    answerEl.textContent = data.reply;
+    answerEl.className = 'answer';
+    renderMetrics(document.getElementById('metrics-' + key), data);
+    document.getElementById('copy-' + key).hidden = false;
+    lastResult[key] = data;
+  }
+
+  function showFailure(key, message) {
+    var answerEl = document.getElementById('answer-' + key);
+    answerEl.textContent = 'Error: ' + message;
+    answerEl.className = 'answer empty';
+    document.getElementById('metrics-' + key).hidden = true;
+    document.getElementById('copy-' + key).hidden = true;
+    lastResult[key] = null;
+  }
+
+  function resetPanels() {
+    ['base', 'os'].forEach(function (key) {
+      var answerEl = document.getElementById('answer-' + key);
+      answerEl.textContent = 'Waiting for the answer…';
+      answerEl.className = 'answer empty';
+      document.getElementById('metrics-' + key).hidden = true;
+      document.getElementById('copy-' + key).hidden = true;
+      lastResult[key] = null;
     });
+  }
 
-    els.copyText.addEventListener('click', () => {
-      if (lastRun) copyToClipboard(buildTextSummary(lastRun), 'Text');
-    });
+  els.run.addEventListener('click', function () {
+    if (!els.code.value.trim()) { setStatus('Enter the access code first.', true); return; }
+    if (!els.question.value.trim()) { setStatus('Enter a question first.', true); return; }
 
-    async function runBoth() {
-      const code = els.code.value.trim();
-      const message = els.question.value.trim();
+    els.run.disabled = true;
+    setStatus('Asking both versions. This can take up to a minute.', false);
+    resetPanels();
 
-      if (!code) {
-        setStatus('Please enter the access code.', true);
-        return;
-      }
+    var failures = [];
+    var jobs = [
+      ask(false).then(function (d) { showResult('base', d); }).catch(function (e) { failures.push(e.message); showFailure('base', e.message); }),
+      ask(true).then(function (d) { showResult('os', d); }).catch(function (e) { failures.push(e.message); showFailure('os', e.message); })
+    ];
 
-      if (!message) {
-        setStatus('Please enter a question.', true);
-        return;
-      }
-
-      try {
-        sessionStorage.setItem('demo_access_code', code);
-      } catch {
-        // 保存できなくても、そのまま続ける
-      }
-
-      els.run.disabled = true;
-      els.copyJson.disabled = true;
-      els.copyText.disabled = true;
-      setStatus('Running both versions in parallel…');
-      setWorking(els.answerOs, els.metricsOs);
-      setWorking(els.answerBase, els.metricsBase);
-
-      const [osResult, baseResult] = await Promise.allSettled([
-        callDemo(true, message, code),
-        callDemo(false, message, code)
-      ]);
-
-      const wrongCode = [osResult, baseResult].some(
-        result => result.status === 'rejected' && result.reason?.status === 401
-      );
-
-      if (osResult.status === 'fulfilled') {
-        showResult(els.answerOs, els.metricsOs, osResult.value);
-      } else {
-        showFailure(els.answerOs, els.metricsOs, osResult.reason);
-      }
-
-      if (baseResult.status === 'fulfilled') {
-        showResult(els.answerBase, els.metricsBase, baseResult.value);
-      } else {
-        showFailure(els.answerBase, els.metricsBase, baseResult.reason);
-      }
-
-      lastRun = {
-        timestamp: new Date().toISOString(),
-        question: message,
-        settings: {
-          model: 'gemini-3.8-flash',
-          thinkingLevel: 'LOW',
-          history: 'none (each run is independent)'
-        },
-        withOS: osResult.status === 'fulfilled'
-          ? osResult.value
-          : { error: osResult.reason.message },
-        baseline: baseResult.status === 'fulfilled'
-          ? baseResult.value
-          : { error: baseResult.reason.message }
-      };
-
-      const anySuccess =
-        osResult.status === 'fulfilled' || baseResult.status === 'fulfilled';
-
-      els.copyJson.disabled = !anySuccess;
-      els.copyText.disabled = !anySuccess;
+    Promise.all(jobs).then(function () {
       els.run.disabled = false;
-
-      if (wrongCode) {
-        setStatus('The access code was not accepted.', true);
-      } else if (osResult.status === 'rejected' || baseResult.status === 'rejected') {
-        setStatus('Finished, but one of the two runs failed.', true);
-      } else {
-        setStatus('Done.');
-      }
-    }
-
-    els.run.addEventListener('click', runBoth);
-
-    els.question.addEventListener('keydown', event => {
-      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-        runBoth();
-      }
+      if (failures.length === 0) setStatus('Done.', false);
+      else setStatus(failures[0], true);
     });
-  </script>
+  });
+
+  function copyResult(key, label) {
+    var data = lastResult[key];
+    if (!data) return;
+    var text = label + '\n\nQuestion:\n' + els.question.value.trim() + '\n\nAnswer:\n' + data.reply + '\n\n' + buildMetricsText(data);
+    var button = document.getElementById('copy-' + key);
+    function done() {
+      button.textContent = 'Copied';
+      setTimeout(function () { button.textContent = 'Copy result'; }, 1500);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { setStatus('Copy failed. Select the text and copy it manually.', true); });
+    } else {
+      setStatus('Copy is not available in this browser. Select the text and copy it manually.', true);
+    }
+  }
+
+  document.getElementById('copy-base').addEventListener('click', function () { copyResult('base', 'Without OS'); });
+  document.getElementById('copy-os').addEventListener('click', function () { copyResult('os', 'With OS'); });
+</script>
 </body>
 </html>
