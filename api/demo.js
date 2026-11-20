@@ -33,6 +33,12 @@ const USER_LANGUAGE_SUFFIX =
 // 自分用の会話の一番最初のAIの返事に近い文章に、書き換えてもよい。
 const SETUP_REPLY = 'Understood.';
 
+// 追加プロトコル(dual-mode)のファイル。Sharp は、これをそのまま使う。
+// Easy は、これのあとに、短い追加の文章(分析モードを使わず、会話モードで返す指示)を足す。
+// EasyとSharpの違いは、その追加の文章だけ。
+const DUAL_MODE_FILE = '../prompts/masato-dual-mode.txt';
+const EASY_ADDENDUM_FILE = '../prompts/masato-easy-addendum.txt';
+
 function readPrompt(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
@@ -507,7 +513,14 @@ export default async function handler(req, res) {
     });
   }
 
-  const useOS = body.useOS !== false;
+  // 画面から届くモード: 'none'(OSなし) / 'easy' / 'sharp'
+  // 古い画面(useOS だけを送る形)にも対応する
+  const mode = ['none', 'easy', 'sharp'].includes(body.mode)
+    ? body.mode
+    : body.useOS === false
+      ? 'none'
+      : 'sharp';
+  const useOS = mode !== 'none';
 
   // OSなしの側に送る質問(何も足さない)
   const userMessage = { role: 'user', parts: [{ text: message }] };
@@ -525,7 +538,12 @@ export default async function handler(req, res) {
     if (useOS) {
       const corePrompt = readPrompt('../prompts/masato-core.txt');
       const referencePrompt = readPrompt('../prompts/masato-reference.txt');
-      const dualModePrompt = readPrompt('../prompts/masato-dual-mode.txt');
+      let dualModePrompt = readPrompt(DUAL_MODE_FILE);
+
+      if (mode === 'easy') {
+        dualModePrompt += '\n\n' + readPrompt(EASY_ADDENDUM_FILE);
+      }
+
 
       const systemText = corePrompt + '\n\n' + LANGUAGE_RULE;
 
@@ -559,7 +577,7 @@ export default async function handler(req, res) {
       : rawText;
 
     return res.status(200).json({
-      mode: useOS ? 'with_os' : 'baseline',
+      mode,
       reply: reply || 'No answer was returned.',
       metrics: {
         model: MODEL_ID,
@@ -567,12 +585,26 @@ export default async function handler(req, res) {
         thinkingLevel: THINKING_LEVEL.toUpperCase(),
         calls,
         totals: sumCalls(calls),
-        systemInstructionAddendum: useOS ? LANGUAGE_RULE : null
+        systemInstructionAddendum: useOS ? LANGUAGE_RULE : null,
+        modeFile: useOS
+          ? mode === 'easy'
+            ? 'masato-dual-mode.txt + masato-easy-addendum.txt'
+            : 'masato-dual-mode.txt'
+          : null
       }
     });
   } catch (error) {
     // 質問や回答の中身は記録しない
     console.error('Demo API Error:', error.message);
+
+    // 指示のファイルが見つからないとき(Easy用のファイルを置き忘れた場合など)
+    if (error.code === 'ENOENT') {
+      const fileName = String(error.path || '').split('/').pop();
+
+      return res.status(500).json({
+        error: `A required prompt file is missing${fileName ? ': ' + fileName : ''}.`
+      });
+    }
 
     return res.status(500).json({
       error: error.message || 'Internal Server Error.'
