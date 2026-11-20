@@ -39,8 +39,25 @@ const SETUP_REPLY = 'Understood.';
 const DUAL_MODE_FILE = '../prompts/masato-dual-mode.txt';
 const EASY_ADDENDUM_FILE = '../prompts/masato-easy-addendum.txt';
 
+// Sharp 用の追加の文章(たとえば「最後の一言のユーモアは入れない」)。
+// このファイルがなければ、何も足さない(置かなくても、エラーにはならない)。
+const SHARP_ADDENDUM_FILE = '../prompts/masato-sharp-addendum.txt';
+
 function readPrompt(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
+}
+
+// ファイルがなければ、空の文字列を返す(あってもなくてもよいファイル用)
+function readOptionalPrompt(path) {
+  try {
+    return readPrompt(path);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return '';
+    }
+
+    throw error;
+  }
 }
 
 function getText(content) {
@@ -108,11 +125,17 @@ const LABEL_ONLY_PATTERN = new RegExp(
 
 // 見出し:
 //   「●」で始まる短い1行(30文字以内、コロンや句点なし)
+//   または「情報①」「まとめ」のように、それだけで1行になっている短い行
 //   または、1行まるごと【】で囲まれた短い行(BRACKET_TAGS のタグを除く)
 function isHeadingLine(line) {
   const text = line.trim();
 
   if (/^●[^：:。\n]{1,30}$/.test(text)) {
+    return true;
+  }
+
+  // 「情報①」「情報②」のような番号つきの見出し、または「まとめ」「結論」だけの行
+  if (/^(情報\s*[①-⑳0-9０-９]+|まとめ|結論)$/.test(text)) {
     return true;
   }
 
@@ -534,16 +557,26 @@ export default async function handler(req, res) {
   try {
     const calls = [];
     let answer;
+    let modeFile = null;
 
     if (useOS) {
       const corePrompt = readPrompt('../prompts/masato-core.txt');
       const referencePrompt = readPrompt('../prompts/masato-reference.txt');
       let dualModePrompt = readPrompt(DUAL_MODE_FILE);
 
+      modeFile = 'masato-dual-mode.txt';
+
       if (mode === 'easy') {
         dualModePrompt += '\n\n' + readPrompt(EASY_ADDENDUM_FILE);
-      }
+        modeFile += ' + masato-easy-addendum.txt';
+      } else {
+        const sharpExtra = readOptionalPrompt(SHARP_ADDENDUM_FILE);
 
+        if (sharpExtra.trim()) {
+          dualModePrompt += '\n\n' + sharpExtra;
+          modeFile += ' + masato-sharp-addendum.txt';
+        }
+      }
 
       const systemText = corePrompt + '\n\n' + LANGUAGE_RULE;
 
@@ -586,11 +619,7 @@ export default async function handler(req, res) {
         calls,
         totals: sumCalls(calls),
         systemInstructionAddendum: useOS ? LANGUAGE_RULE : null,
-        modeFile: useOS
-          ? mode === 'easy'
-            ? 'masato-dual-mode.txt + masato-easy-addendum.txt'
-            : 'masato-dual-mode.txt'
-          : null
+        modeFile
       }
     });
   } catch (error) {
