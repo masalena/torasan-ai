@@ -6,107 +6,60 @@
 <title>Masato AI — Evaluation Demo</title>
 <style>
   :root {
-    --bg: #f5f6f8;
-    --surface: #ffffff;
-    --text: #1d2430;
-    --muted: #5d6675;
-    --line: #d9dde4;
-    --base: #6b7380;
-    --os: #1f5f8b;
-    --os-soft: #e8f1f7;
-    --error: #b3261e;
+    --bg: #f5f6f8; --surface: #ffffff; --text: #1d2430; --muted: #5d6675; --line: #d9dde4;
+    --base: #6b7380; --easy: #2f7d5b; --sharp: #1f5f8b; --error: #b3261e;
+    --tint-easy: #e8f4ee; --tint-sharp: #e8f1f7;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #14171c;
-      --surface: #1c2027;
-      --text: #e6e9ee;
-      --muted: #9aa3b2;
-      --line: #313743;
-      --base: #9aa3b2;
-      --os: #6fb3e0;
-      --os-soft: #1b2a36;
-      --error: #f2a29c;
+      --bg: #14171c; --surface: #1c2027; --text: #e6e9ee; --muted: #9aa3b2; --line: #313743;
+      --base: #9aa3b2; --easy: #6fc59b; --sharp: #6fb3e0; --error: #f2a29c;
+      --tint-easy: #1b2e25; --tint-sharp: #1b2a36;
     }
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    line-height: 1.6;
-  }
-  main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+  body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.6;
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
   h1 { font-size: 1.5rem; margin: 0 0 4px; }
-  .lead { color: var(--muted); margin: 0 0 20px; max-width: 62ch; }
-  label { display: block; font-weight: 600; margin: 0 0 6px; }
-  input, textarea {
-    width: 100%;
-    font: inherit;
-    color: var(--text);
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 10px 12px;
-  }
+  .lead { color: var(--muted); margin: 0 0 20px; max-width: 70ch; }
+  label.title { display: block; font-weight: 600; margin: 0 0 6px; }
+  input[type=password], textarea { width: 100%; font: inherit; color: var(--text); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
   textarea { min-height: 120px; resize: vertical; }
-  input:focus-visible, textarea:focus-visible, button:focus-visible {
-    outline: 2px solid var(--os);
-    outline-offset: 2px;
-  }
+  input[type=checkbox] { width: 18px; height: 18px; margin: 0; }
+  input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--sharp); outline-offset: 2px; }
   .field { margin-bottom: 16px; }
   .code-field { max-width: 320px; }
   .samples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
   .samples span { color: var(--muted); align-self: center; }
-  button {
-    font: inherit;
-    cursor: pointer;
-    border-radius: 6px;
-    border: 1px solid var(--line);
-    background: var(--surface);
-    color: var(--text);
-    padding: 8px 14px;
-  }
-  button.primary {
-    background: var(--os);
-    border-color: var(--os);
-    color: #fff;
-    font-weight: 600;
-    padding: 10px 22px;
-  }
+  button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--text); padding: 8px 14px; }
+  button.primary { background: var(--sharp); border-color: var(--sharp); color: #fff; font-weight: 600; padding: 10px 22px; }
   @media (prefers-color-scheme: dark) { button.primary { color: #0d1620; } }
   button:disabled { opacity: 0.55; cursor: not-allowed; }
   .status { min-height: 1.6em; margin: 12px 0 0; color: var(--muted); }
   .status.error { color: var(--error); }
-  .results { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
-  @media (max-width: 760px) { .results { grid-template-columns: 1fr; } }
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-top: 4px solid var(--base);
-    border-radius: 6px;
-    padding: 14px 16px;
-    min-width: 0;
-  }
-  .panel.os { border-top-color: var(--os); }
-  .panel h2 { font-size: 1.05rem; margin: 0 0 2px; }
-  .panel .sub { color: var(--muted); font-size: 0.88rem; margin: 0 0 12px; }
+  .results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+  @media (max-width: 960px) { .results { grid-template-columns: 1fr; } }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--base);
+    border-radius: 6px; padding: 14px 16px; min-width: 0; }
+  .panel.easy { border-top-color: var(--easy); }
+  .panel.sharp { border-top-color: var(--sharp); }
+  .panel.off { opacity: 0.55; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .panel h2 { font-size: 1.05rem; margin: 0; }
+  .include { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; color: var(--muted); cursor: pointer; }
+  .panel .sub { color: var(--muted); font-size: 0.88rem; margin: 2px 0 12px; }
   .answer { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 4em; }
   .answer.empty { color: var(--muted); }
-  .metrics {
-    margin-top: 14px;
-    padding: 10px 12px;
-    border-radius: 6px;
-    background: var(--os-soft);
-    font-size: 0.88rem;
-  }
-  .panel:not(.os) .metrics { background: var(--bg); }
+  .metrics { margin-top: 14px; padding: 10px 12px; border-radius: 6px; background: var(--bg); font-size: 0.88rem; }
+  .panel.easy .metrics { background: var(--tint-easy); }
+  .panel.sharp .metrics { background: var(--tint-sharp); }
   .metrics table { width: 100%; border-collapse: collapse; }
   .metrics th, .metrics td { text-align: left; padding: 2px 8px 2px 0; font-weight: normal; }
   .metrics .head th { color: var(--muted); border-bottom: 1px solid var(--line); }
-  .metrics .total td { font-weight: 600; border-top: 1px solid var(--line); }
-  .metrics .meta { color: var(--muted); margin-top: 6px; }
+  .metrics .meta { color: var(--muted); margin-top: 6px; overflow-wrap: anywhere; }
   .table-wrap { overflow-x: auto; }
   .copy-row { margin-top: 12px; }
   [hidden] { display: none !important; }
@@ -115,15 +68,15 @@
 <body>
 <main>
   <h1>Masato AI — Evaluation Demo</h1>
-  <p class="lead">Ask one question and compare two answers from the same model: one without the Masato OS, and one with it. Each question is answered once, with no chat history.</p>
+  <p class="lead">Ask one question and compare answers from the same model: without the Masato OS, and with it in two settings (Easy and Sharp). Each question is answered once, with no chat history. Untick a column to skip it and save cost.</p>
 
   <div class="field code-field">
-    <label for="code">Access code</label>
+    <label class="title" for="code">Access code</label>
     <input id="code" type="password" autocomplete="off" placeholder="Enter your access code">
   </div>
 
   <div class="field">
-    <label for="question">Question</label>
+    <label class="title" for="question">Question</label>
     <div class="samples">
       <span>Try a sample:</span>
       <button type="button" id="sample1">Tilted glass</button>
@@ -135,22 +88,7 @@
   <button type="button" class="primary" id="run">Compare answers</button>
   <p class="status" id="status" role="status"></p>
 
-  <div class="results">
-    <section class="panel" id="panel-base">
-      <h2>Without OS</h2>
-      <p class="sub">The model alone, no system instructions.</p>
-      <div class="answer empty" id="answer-base">The answer will appear here.</div>
-      <div class="metrics" id="metrics-base" hidden></div>
-      <div class="copy-row"><button type="button" id="copy-base" hidden>Copy result</button></div>
-    </section>
-    <section class="panel os" id="panel-os">
-      <h2>With OS</h2>
-      <p class="sub">The same model with the Masato OS.</p>
-      <div class="answer empty" id="answer-os">The answer will appear here.</div>
-      <div class="metrics" id="metrics-os" hidden></div>
-      <div class="copy-row"><button type="button" id="copy-os" hidden>Copy result</button></div>
-    </section>
-  </div>
+  <div class="results" id="results"></div>
 </main>
 
 <script>
@@ -160,37 +98,61 @@
     sample2: "Five cars are parked in a row: red, blue, green, white and black. The red car is not at either end. The blue car is right next to the green car. The white car is somewhere to the left of the black car. How many different arrangements are possible?"
   };
 
+  // The three columns, left to right. "mode" is what the server receives.
+  var COLUMNS = [
+    { key: 'base',  mode: 'none',  title: 'Without OS',       sub: 'The model alone, no system instructions.' },
+    { key: 'easy',  mode: 'easy',  title: 'With OS · Easy',   sub: 'The same OS with analysis mode switched off.' },
+    { key: 'sharp', mode: 'sharp', title: 'With OS · Sharp',  sub: 'The same OS with automatic mode switching.' }
+  ];
+
   var els = {
     code: document.getElementById('code'),
     question: document.getElementById('question'),
     run: document.getElementById('run'),
-    status: document.getElementById('status')
+    status: document.getElementById('status'),
+    results: document.getElementById('results')
   };
-  var lastResult = { base: null, os: null };
+  var lastResult = {};
 
   document.getElementById('sample1').addEventListener('click', function () { els.question.value = SAMPLES.sample1; });
   document.getElementById('sample2').addEventListener('click', function () { els.question.value = SAMPLES.sample2; });
 
-  function setStatus(text, isError) {
-    els.status.textContent = text;
-    els.status.className = 'status' + (isError ? ' error' : '');
-  }
-
+  function $(id) { return document.getElementById(id); }
+  function setStatus(text, isError) { els.status.textContent = text; els.status.className = 'status' + (isError ? ' error' : ''); }
   function formatSeconds(ms) { return (ms / 1000).toFixed(1) + ' s'; }
   function formatNumber(n) { return Number(n || 0).toLocaleString('en-US'); }
 
-  function ask(useOS) {
+  function buildPanels() {
+    COLUMNS.forEach(function (c) {
+      var section = document.createElement('section');
+      section.className = 'panel ' + c.key;
+      section.id = 'panel-' + c.key;
+      section.innerHTML =
+        '<div class="panel-head"><h2>' + c.title + '</h2>' +
+        '<label class="include"><input type="checkbox" id="use-' + c.key + '" checked> Include</label></div>' +
+        '<p class="sub">' + c.sub + '</p>' +
+        '<div class="answer empty" id="answer-' + c.key + '">The answer will appear here.</div>' +
+        '<div class="metrics" id="metrics-' + c.key + '" hidden></div>' +
+        '<div class="copy-row"><button type="button" id="copy-' + c.key + '" hidden>Copy result</button></div>';
+      els.results.appendChild(section);
+      $('use-' + c.key).addEventListener('change', function () {
+        section.classList.toggle('off', !this.checked);
+      });
+      $('copy-' + c.key).addEventListener('click', function () { copyResult(c); });
+    });
+  }
+
+  function ask(mode) {
     return fetch('/api/demo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: els.code.value, message: els.question.value, useOS: useOS })
+      body: JSON.stringify({ code: els.code.value, message: els.question.value, mode: mode })
     }).then(function (response) {
       return response.text().then(function (raw) {
         var data = null;
         try { data = raw ? JSON.parse(raw) : null; } catch (e) { data = null; }
         if (!response.ok || !data) {
-          var message = (data && data.error) || ('The server returned an error (' + response.status + '). If it took very long, try again.');
-          throw new Error(message);
+          throw new Error((data && data.error) || ('The server returned an error (' + response.status + '). If it took very long, try again.'));
         }
         return data;
       });
@@ -199,25 +161,22 @@
 
   function buildMetricsText(data) {
     var m = data.metrics, t = m.totals;
-    var lines = [
-      'Model: ' + (m.modelVersion || m.model) + ' (thinking: ' + m.thinkingLevel + ')'
-    ];
+    var lines = ['Model: ' + (m.modelVersion || m.model) + ' (thinking: ' + m.thinkingLevel + ')'];
+    if (m.modeFile) lines.push('Mode prompt file: ' + m.modeFile);
     m.calls.forEach(function (c) {
       lines.push(c.call + ': input ' + c.inputTokens + ', output ' + c.outputTokens + ', thinking ' + c.thinkingTokens + ', total ' + c.totalTokens + ', ' + formatSeconds(c.timeMs));
     });
-    lines.push('Total: input ' + t.inputTokens + ', output ' + t.outputTokens + ', thinking ' + t.thinkingTokens + ', total ' + t.totalTokens + ', ' + formatSeconds(t.timeMs));
+    if (m.calls.length > 1) lines.push('Total: input ' + t.inputTokens + ', output ' + t.outputTokens + ', thinking ' + t.thinkingTokens + ', total ' + t.totalTokens + ', ' + formatSeconds(t.timeMs));
     if (m.systemInstructionAddendum) lines.push('Added to system instructions: ' + m.systemInstructionAddendum);
     return lines.join('\n');
   }
 
   function renderMetrics(box, data) {
-    var m = data.metrics, t = m.totals;
+    var m = data.metrics;
     box.textContent = '';
-
     var wrap = document.createElement('div');
     wrap.className = 'table-wrap';
     var table = document.createElement('table');
-
     function row(cls, cells, tag) {
       var tr = document.createElement('tr');
       if (cls) tr.className = cls;
@@ -228,92 +187,85 @@
       });
       table.appendChild(tr);
     }
-
     row('head', ['Call', 'Input', 'Output', 'Thinking', 'Time'], 'th');
     m.calls.forEach(function (c) {
       row('', [c.call, formatNumber(c.inputTokens), formatNumber(c.outputTokens), formatNumber(c.thinkingTokens), formatSeconds(c.timeMs)]);
     });
-    if (m.calls.length > 1) {
-      row('total', ['Total', formatNumber(t.inputTokens), formatNumber(t.outputTokens), formatNumber(t.thinkingTokens), formatSeconds(t.timeMs)]);
-    }
     wrap.appendChild(table);
     box.appendChild(wrap);
-
     var meta = document.createElement('div');
     meta.className = 'meta';
-    meta.textContent = 'Model: ' + (m.modelVersion || m.model) + ' · Thinking: ' + m.thinkingLevel;
+    meta.textContent = 'Model: ' + (m.modelVersion || m.model) + ' · Thinking: ' + m.thinkingLevel + (m.modeFile ? ' · Mode prompt: ' + m.modeFile : '');
     box.appendChild(meta);
     box.hidden = false;
   }
 
+  function setAnswer(key, text, isEmpty) {
+    var el = $('answer-' + key);
+    el.textContent = text;
+    el.className = 'answer' + (isEmpty ? ' empty' : '');
+  }
+
+  function clearExtras(key) {
+    $('metrics-' + key).hidden = true;
+    $('copy-' + key).hidden = true;
+    lastResult[key] = null;
+  }
+
   function showResult(key, data) {
-    var answerEl = document.getElementById('answer-' + key);
-    answerEl.textContent = data.reply;
-    answerEl.className = 'answer';
-    renderMetrics(document.getElementById('metrics-' + key), data);
-    document.getElementById('copy-' + key).hidden = false;
+    setAnswer(key, data.reply, false);
+    renderMetrics($('metrics-' + key), data);
+    $('copy-' + key).hidden = false;
     lastResult[key] = data;
   }
 
   function showFailure(key, message) {
-    var answerEl = document.getElementById('answer-' + key);
-    answerEl.textContent = 'Error: ' + message;
-    answerEl.className = 'answer empty';
-    document.getElementById('metrics-' + key).hidden = true;
-    document.getElementById('copy-' + key).hidden = true;
-    lastResult[key] = null;
-  }
-
-  function resetPanels() {
-    ['base', 'os'].forEach(function (key) {
-      var answerEl = document.getElementById('answer-' + key);
-      answerEl.textContent = 'Waiting for the answer…';
-      answerEl.className = 'answer empty';
-      document.getElementById('metrics-' + key).hidden = true;
-      document.getElementById('copy-' + key).hidden = true;
-      lastResult[key] = null;
-    });
+    setAnswer(key, 'Error: ' + message, true);
+    clearExtras(key);
   }
 
   els.run.addEventListener('click', function () {
+    var selected = COLUMNS.filter(function (c) { return $('use-' + c.key).checked; });
     if (!els.code.value.trim()) { setStatus('Enter the access code first.', true); return; }
     if (!els.question.value.trim()) { setStatus('Enter a question first.', true); return; }
+    if (selected.length === 0) { setStatus('Tick at least one column.', true); return; }
 
     els.run.disabled = true;
-    setStatus('Asking both versions. This can take up to a minute.', false);
-    resetPanels();
+    setStatus('Asking ' + selected.length + (selected.length === 1 ? ' version' : ' versions') + '. This can take up to a minute.', false);
+
+    COLUMNS.forEach(function (c) {
+      var on = $('use-' + c.key).checked;
+      setAnswer(c.key, on ? 'Waiting for the answer…' : 'Not included in this run.', true);
+      clearExtras(c.key);
+    });
 
     var failures = [];
-    var jobs = [
-      ask(false).then(function (d) { showResult('base', d); }).catch(function (e) { failures.push(e.message); showFailure('base', e.message); }),
-      ask(true).then(function (d) { showResult('os', d); }).catch(function (e) { failures.push(e.message); showFailure('os', e.message); })
-    ];
-
-    Promise.all(jobs).then(function () {
+    Promise.all(selected.map(function (c) {
+      return ask(c.mode)
+        .then(function (d) { showResult(c.key, d); })
+        .catch(function (e) { failures.push(e.message); showFailure(c.key, e.message); });
+    })).then(function () {
       els.run.disabled = false;
-      if (failures.length === 0) setStatus('Done.', false);
-      else setStatus(failures[0], true);
+      setStatus(failures.length === 0 ? 'Done.' : failures[0], failures.length > 0);
     });
   });
 
-  function copyResult(key, label) {
-    var data = lastResult[key];
+  function copyResult(c) {
+    var data = lastResult[c.key];
     if (!data) return;
-    var text = label + '\n\nQuestion:\n' + els.question.value.trim() + '\n\nAnswer:\n' + data.reply + '\n\n' + buildMetricsText(data);
-    var button = document.getElementById('copy-' + key);
-    function done() {
-      button.textContent = 'Copied';
-      setTimeout(function () { button.textContent = 'Copy result'; }, 1500);
-    }
+    var text = c.title + '\n\nQuestion:\n' + els.question.value.trim() + '\n\nAnswer:\n' + data.reply + '\n\n' + buildMetricsText(data);
+    var button = $('copy-' + c.key);
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(function () { setStatus('Copy failed. Select the text and copy it manually.', true); });
+      navigator.clipboard.writeText(text).then(function () {
+        button.textContent = 'Copied';
+        setTimeout(function () { button.textContent = 'Copy result'; }, 1500);
+      }).catch(function () { setStatus('Copy failed. Select the text and copy it manually.', true); });
     } else {
       setStatus('Copy is not available in this browser. Select the text and copy it manually.', true);
     }
   }
 
-  document.getElementById('copy-base').addEventListener('click', function () { copyResult('base', 'Without OS'); });
-  document.getElementById('copy-os').addEventListener('click', function () { copyResult('os', 'With OS'); });
+  buildPanels();
 </script>
 </body>
 </html>
