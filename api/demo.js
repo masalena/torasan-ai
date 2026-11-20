@@ -134,6 +134,11 @@ function isHeadingLine(line) {
     return true;
   }
 
+  // 英語の回答の見出し: 半角のかっこの [Step 0: Initial Intuitive Check] のような行
+  if (/^\[\s*Step\s*[0-9０-９]+\s*[:：][^\]\n]{0,60}\]$/i.test(text)) {
+    return true;
+  }
+
   // 「情報①」「情報②」のような番号つきの見出し、または「まとめ」「結論」だけの行
   if (/^(情報\s*[①-⑳0-9０-９]+|まとめ|結論)$/.test(text)) {
     return true;
@@ -227,6 +232,11 @@ function tidyHeadedAnswer(lines, headings, names) {
     }
 
     if (index > first && index < last) {
+      // 見出しのあいだの区切り線(---)は消す
+      if (/^\s*[-—_*]{3,}\s*$/.test(line)) {
+        return;
+      }
+
       const cleaned = stripLabel(line);
 
       // 項目名だけの行が消えたら、その下の字下げの行は、箇条書きにそろえる
