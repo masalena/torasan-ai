@@ -28,7 +28,7 @@
     border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
   textarea { min-height: 120px; resize: vertical; }
   input[type=checkbox] { width: 18px; height: 18px; margin: 0; }
-  input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--sharp); outline-offset: 2px; }
+  input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--sharp); outline-offset: 2px; }
   .field { margin-bottom: 16px; }
   .code-field { max-width: 320px; }
   .samples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
@@ -38,6 +38,8 @@
   button.primary { background: var(--sharp); border-color: var(--sharp); color: #fff; font-weight: 600; padding: 10px 22px; }
   @media (prefers-color-scheme: dark) { button.primary { color: #0d1620; } }
   button:disabled { opacity: 0.55; cursor: not-allowed; }
+  select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 8px; }
   .status { min-height: 1.6em; margin: 12px 0 0; color: var(--muted); }
   .status.error { color: var(--error); }
   .results { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
@@ -51,6 +53,8 @@
   .panel h2 { font-size: 1.05rem; margin: 0; }
   .include { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; color: var(--muted); cursor: pointer; }
   .panel .sub { color: var(--muted); font-size: 0.88rem; margin: 2px 0 12px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0 0 12px; }
+  .controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; color: var(--muted); }
   .answer { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 4em; }
   .answer.empty { color: var(--muted); }
   .metrics { margin-top: 14px; padding: 10px 12px; border-radius: 6px; background: var(--bg); font-size: 0.88rem; }
@@ -68,7 +72,7 @@
 <body>
 <main>
   <h1>Masato AI — Evaluation Demo</h1>
-  <p class="lead">Ask one question and compare answers from the same model: without the Masato OS, and with it in two settings (Easy and Sharp). Each question is answered once, with no chat history. Untick a column to skip it and save cost.</p>
+  <p class="lead">Ask one question and compare answers: the Masato OS on Gemini 3.8 Flash (Easy and Sharp, low thinking) against a model without the OS. The left column starts as Gemini 4 Carbon with medium thinking, and can be switched to Gemini 3.8 Flash for a same-model comparison. Each question is answered once, with no chat history. Untick a column to skip it and save cost.</p>
 
   <div class="field code-field">
     <label class="title" for="code">Access code</label>
@@ -98,9 +102,25 @@
     sample2: "Five cars are parked in a row: red, blue, green, white and black. The red car is not at either end. The blue car is right next to the green car. The white car is somewhere to the left of the black car. How many different arrangements are possible?"
   };
 
+  // Models and thinking levels that can be chosen in the left column.
+  // OS_MODEL_ID is the model the OS columns always use (set on the server).
+  // DEFAULT_BASE is what the left column starts as.
+  // The ids must match the allowed list on the server (api/demo.js).
+  var OS_MODEL_ID = 'gemini-3.8-flash';
+  var DEFAULT_BASE = { modelId: 'gemini-4-carbon', thinkingLevel: 'medium' };
+  var MODEL_CHOICES = [
+    { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+    { id: 'gemini-4-carbon', label: 'Gemini 4 Carbon' }
+  ];
+  var THINKING_CHOICES = [
+    { id: 'low', label: 'Low' },
+    { id: 'medium', label: 'Medium' }
+  ];
+
   // The three columns, left to right. "mode" is what the server receives.
+  // "selectable" columns show the model and thinking-level choices.
   var COLUMNS = [
-    { key: 'base',  mode: 'none',  title: 'Without OS',       sub: 'The model alone, no system instructions.' },
+    { key: 'base',  mode: 'none',  title: 'Without OS',       sub: 'The model alone, no system instructions.', selectable: true },
     { key: 'easy',  mode: 'easy',  title: 'With OS · Easy',   sub: 'The same OS with analysis mode switched off.' },
     { key: 'sharp', mode: 'sharp', title: 'With OS · Sharp',  sub: 'The same OS with automatic mode switching.' }
   ];
@@ -122,15 +142,28 @@
   function formatSeconds(ms) { return (ms / 1000).toFixed(1) + ' s'; }
   function formatNumber(n) { return Number(n || 0).toLocaleString('en-US'); }
 
+  function optionsHtml(list) {
+    return list.map(function (o) { return '<option value="' + o.id + '">' + o.label + '</option>'; }).join('');
+  }
+
   function buildPanels() {
     COLUMNS.forEach(function (c) {
       var section = document.createElement('section');
       section.className = 'panel ' + c.key;
       section.id = 'panel-' + c.key;
+      var controls = '';
+      if (c.selectable) {
+        controls =
+          '<div class="controls">' +
+          '<label>Model <select id="model-' + c.key + '">' + optionsHtml(MODEL_CHOICES) + '</select></label>' +
+          '<label>Thinking <select id="thinking-' + c.key + '">' + optionsHtml(THINKING_CHOICES) + '</select></label>' +
+          '</div>';
+      }
       section.innerHTML =
         '<div class="panel-head"><h2>' + c.title + '</h2>' +
         '<label class="include"><input type="checkbox" id="use-' + c.key + '" checked> Include</label></div>' +
-        '<p class="sub">' + c.sub + '</p>' +
+        '<p class="sub" id="sub-' + c.key + '">' + c.sub + '</p>' +
+        controls +
         '<div class="answer empty" id="answer-' + c.key + '">The answer will appear here.</div>' +
         '<div class="metrics" id="metrics-' + c.key + '" hidden></div>' +
         '<div class="copy-row"><button type="button" id="copy-' + c.key + '" hidden>Copy result</button></div>';
@@ -139,14 +172,31 @@
         section.classList.toggle('off', !this.checked);
       });
       $('copy-' + c.key).addEventListener('click', function () { copyResult(c); });
+      if (c.selectable) {
+        var modelSelect = $('model-' + c.key);
+        var updateSub = function () {
+          $('sub-' + c.key).textContent = (modelSelect.value === OS_MODEL_ID)
+            ? c.sub
+            : 'Reference model (not the model used in the OS columns). No system instructions.';
+        };
+        modelSelect.value = DEFAULT_BASE.modelId;
+        $('thinking-' + c.key).value = DEFAULT_BASE.thinkingLevel;
+        modelSelect.addEventListener('change', updateSub);
+        updateSub();
+      }
     });
   }
 
-  function ask(mode) {
+  function ask(c) {
+    var payload = { code: els.code.value, message: els.question.value, mode: c.mode };
+    if (c.selectable) {
+      payload.modelId = $('model-' + c.key).value;
+      payload.thinkingLevel = $('thinking-' + c.key).value;
+    }
     return fetch('/api/demo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: els.code.value, message: els.question.value, mode: mode })
+      body: JSON.stringify(payload)
     }).then(function (response) {
       return response.text().then(function (raw) {
         var data = null;
@@ -197,6 +247,20 @@
     meta.className = 'meta';
     meta.textContent = 'Model: ' + (m.modelVersion || m.model) + ' · Thinking: ' + m.thinkingLevel + (m.modeFile ? ' · Mode prompt: ' + m.modeFile : '');
     box.appendChild(meta);
+
+    // If the API's total is larger than input + output + thinking, show the difference,
+    // so that tokens which are not itemized cannot go unnoticed.
+    var unitemized = 0;
+    m.calls.forEach(function (c) {
+      unitemized += Math.max(0, (c.totalTokens || 0) - (c.inputTokens || 0) - (c.outputTokens || 0) - (c.thinkingTokens || 0));
+    });
+    if (unitemized > 0) {
+      var note = document.createElement('div');
+      note.className = 'meta';
+      note.textContent = 'Tokens counted in the total but not itemized above: ' + formatNumber(unitemized);
+      box.appendChild(note);
+    }
+
     box.hidden = false;
   }
 
@@ -231,7 +295,11 @@
     if (selected.length === 0) { setStatus('Tick at least one column.', true); return; }
 
     els.run.disabled = true;
-    setStatus('Asking ' + selected.length + (selected.length === 1 ? ' version' : ' versions') + '. This can take up to a minute.', false);
+    var slow = selected.some(function (c) {
+      return c.selectable && $('model-' + c.key).value !== OS_MODEL_ID;
+    });
+    setStatus('Asking ' + selected.length + (selected.length === 1 ? ' version' : ' versions') + '. ' +
+      (slow ? 'The Carbon model can take several minutes.' : 'This can take up to a minute.'), false);
 
     COLUMNS.forEach(function (c) {
       var on = $('use-' + c.key).checked;
@@ -241,7 +309,7 @@
 
     var failures = [];
     Promise.all(selected.map(function (c) {
-      return ask(c.mode)
+      return ask(c)
         .then(function (d) { showResult(c.key, d); })
         .catch(function (e) { failures.push(e.message); showFailure(c.key, e.message); });
     })).then(function () {
