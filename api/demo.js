@@ -9,8 +9,16 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 // =====================================================
 
 // ----- デモの固定設定(ここを変えると、デモ全体が変わる)-----
-const MODEL_ID = 'gemini-3.8-flash';
-const THINKING_LEVEL = 'low';
+// 画面からモデルや思考レベルの指定がないときは、この2つを使う(従来どおり)。
+const DEFAULT_MODEL_ID = 'gemini-3.8-flash';
+const DEFAULT_THINKING_LEVEL = 'low';
+
+// 画面から選べるモデルと、そのモデルで使える思考レベル(許可リスト)
+const MODEL_OPTIONS = {
+  'gemini-3.8-flash': ['low', 'medium'],
+  'gemini-4-carbon': ['low', 'medium']
+};
+
 const MAX_MESSAGE_LENGTH = 4000;
 
 // true: 回答の項目名(急所、利益など)を隠す。false: そのまま見せる。
@@ -424,12 +432,12 @@ function tidyAnswer(text, isJapanese) {
 // ===== 画面用の整形 終了 =====
 
 // ----- Gemini の呼び出し -----
-async function callGemini({ systemText, contents }) {
+async function callGemini({ systemText, contents, modelId, thinkingLevel }) {
   const body = {
     contents,
     generationConfig: {
       thinkingConfig: {
-        thinkingLevel: THINKING_LEVEL
+        thinkingLevel
       }
     }
   };
@@ -441,7 +449,7 @@ async function callGemini({ systemText, contents }) {
   const startedAt = performance.now();
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`,
     {
       method: 'POST',
       headers: {
@@ -546,6 +554,24 @@ export default async function handler(req, res) {
     });
   }
 
+  // 画面から届くモデルと思考レベル。指定がなければ従来どおり(3.8 Flash・low)。
+  // 許可リストにない値は、黙って別の設定にせず、エラーにする(測定の取り違えを防ぐため)。
+  const modelId = body.modelId == null ? DEFAULT_MODEL_ID : body.modelId;
+
+  if (!Object.hasOwn(MODEL_OPTIONS, modelId)) {
+    return res.status(400).json({ error: 'This model is not available.' });
+  }
+
+  const thinkingLevel = body.thinkingLevel == null
+    ? DEFAULT_THINKING_LEVEL
+    : String(body.thinkingLevel).toLowerCase();
+
+  if (!MODEL_OPTIONS[modelId].includes(thinkingLevel)) {
+    return res.status(400).json({
+      error: 'This thinking level is not available for the model.'
+    });
+  }
+
   // 画面から届くモード: 'none'(OSなし) / 'easy' / 'sharp'
   // 古い画面(useOS だけを送る形)にも対応する
   const mode = ['none', 'easy', 'sharp'].includes(body.mode)
@@ -601,14 +627,18 @@ export default async function handler(req, res) {
 
       answer = await callGemini({
         systemText,
-        contents: [initialMessage, setupReply, osUserMessage]
+        contents: [initialMessage, setupReply, osUserMessage],
+        modelId,
+        thinkingLevel
       });
 
       calls.push(summarizeCall('answer', answer));
     } else {
       answer = await callGemini({
         systemText: null,
-        contents: [userMessage]
+        contents: [userMessage],
+        modelId,
+        thinkingLevel
       });
 
       calls.push(summarizeCall('answer', answer));
@@ -623,9 +653,9 @@ export default async function handler(req, res) {
       mode,
       reply: reply || 'No answer was returned.',
       metrics: {
-        model: MODEL_ID,
+        model: modelId,
         modelVersion: answer.modelVersion,
-        thinkingLevel: THINKING_LEVEL.toUpperCase(),
+        thinkingLevel: thinkingLevel.toUpperCase(),
         calls,
         totals: sumCalls(calls),
         systemInstructionAddendum: useOS ? LANGUAGE_RULE : null,
