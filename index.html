@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Masato AI — Evaluation Demo</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <style>
   :root {
     --bg: #f5f6f8; --surface: #ffffff; --text: #1d2430; --muted: #5d6675; --line: #d9dde4;
@@ -57,6 +60,12 @@
   .controls label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.88rem; color: var(--muted); }
   .answer { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 4em; }
   .answer.empty { color: var(--muted); }
+  .answer .gap { height: 0.6em; }
+  .answer .md-h { font-weight: 700; margin-top: 0.4em; }
+  .answer .md-li { position: relative; padding-left: 1.1em; }
+  .answer .md-li::before { content: "•"; position: absolute; left: 0; }
+  .answer hr { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
+  .answer .katex-display { overflow-x: auto; overflow-y: hidden; margin: 0.6em 0; }
   .metrics { margin-top: 14px; padding: 10px 12px; border-radius: 6px; background: var(--bg); font-size: 0.88rem; }
   .panel.easy .metrics { background: var(--tint-easy); }
   .panel.sharp .metrics { background: var(--tint-sharp); }
@@ -262,10 +271,93 @@
     box.hidden = false;
   }
 
+  // Plain text for status messages ("Waiting...", errors, etc.).
   function setAnswer(key, text, isEmpty) {
     var el = $('answer-' + key);
     el.textContent = text;
     el.className = 'answer' + (isEmpty ? ' empty' : '');
+  }
+
+  // Adds text to a parent, turning **bold** into <strong>. Only text nodes are created,
+  // so nothing the model writes can inject HTML.
+  function addInline(parent, text) {
+    var parts = text.split('**');
+    if (parts.length < 3 || parts.length % 2 === 0) {
+      parent.appendChild(document.createTextNode(text));
+      return;
+    }
+    parts.forEach(function (p, i) {
+      if (!p) return;
+      if (i % 2 === 1) {
+        var b = document.createElement('strong');
+        b.textContent = p;
+        parent.appendChild(b);
+      } else {
+        parent.appendChild(document.createTextNode(p));
+      }
+    });
+  }
+
+  // Shows a model answer: headings, bold, bullets and math are made readable.
+  // The original text is not changed (the copy button still copies it as it is).
+  function renderAnswer(el, text) {
+    el.textContent = '';
+    var lines = String(text).replace(/\r\n/g, '\n').split('\n');
+    lines.forEach(function (line) {
+      var m;
+      if (/^\s*$/.test(line)) {
+        var gap = document.createElement('div');
+        gap.className = 'gap';
+        el.appendChild(gap);
+        return;
+      }
+      if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+        el.appendChild(document.createElement('hr'));
+        return;
+      }
+      m = /^\s{0,3}#{1,6}\s+(.*)$/.exec(line);
+      if (m) {
+        var h = document.createElement('div');
+        h.className = 'md-h';
+        addInline(h, m[1]);
+        el.appendChild(h);
+        return;
+      }
+      m = /^(\s*)[*\-]\s+(.*)$/.exec(line);
+      if (m) {
+        var li = document.createElement('div');
+        li.className = 'md-li';
+        var level = Math.min(3, Math.floor(m[1].length / 2));
+        if (level > 0) li.style.marginLeft = (level * 1.2) + 'em';
+        addInline(li, m[2]);
+        el.appendChild(li);
+        return;
+      }
+      var p = document.createElement('div');
+      addInline(p, line);
+      el.appendChild(p);
+    });
+    // Math: if the library did not load, the formulas simply stay as plain text.
+    if (window.renderMathInElement) {
+      try {
+        window.renderMathInElement(el, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '\\[', right: '\\]', display: true },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '$', right: '$', display: false }
+          ],
+          throwOnError: false,
+          strict: 'ignore'
+        });
+      } catch (e) { /* keep the plain text */ }
+    }
+  }
+
+  function setRichAnswer(key, text) {
+    var el = $('answer-' + key);
+    el.className = 'answer';
+    renderAnswer(el, text);
   }
 
   function clearExtras(key) {
@@ -275,7 +367,7 @@
   }
 
   function showResult(key, data) {
-    setAnswer(key, data.reply, false);
+    setRichAnswer(key, data.reply);
     renderMetrics($('metrics-' + key), data);
     $('copy-' + key).hidden = false;
     lastResult[key] = data;
