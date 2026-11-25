@@ -212,12 +212,10 @@
   function buildMetricsText(data) {
     var m = data.metrics, t = m.totals;
     var lines = ['Model: ' + (m.modelVersion || m.model) + ' (thinking: ' + m.thinkingLevel + ')'];
-    if (m.modeFile) lines.push('Mode prompt file: ' + m.modeFile);
     m.calls.forEach(function (c) {
       lines.push(c.call + ': input ' + c.inputTokens + ', output ' + c.outputTokens + ', thinking ' + c.thinkingTokens + ', total ' + c.totalTokens + ', ' + formatSeconds(c.timeMs));
     });
     if (m.calls.length > 1) lines.push('Total: input ' + t.inputTokens + ', output ' + t.outputTokens + ', thinking ' + t.thinkingTokens + ', total ' + t.totalTokens + ', ' + formatSeconds(t.timeMs));
-    if (m.systemInstructionAddendum) lines.push('Added to system instructions: ' + m.systemInstructionAddendum);
     return lines.join('\n');
   }
 
@@ -245,7 +243,7 @@
     box.appendChild(wrap);
     var meta = document.createElement('div');
     meta.className = 'meta';
-    meta.textContent = 'Model: ' + (m.modelVersion || m.model) + ' · Thinking: ' + m.thinkingLevel + (m.modeFile ? ' · Mode prompt: ' + m.modeFile : '');
+    meta.textContent = 'Model: ' + (m.modelVersion || m.model) + ' · Thinking: ' + m.thinkingLevel;
     box.appendChild(meta);
 
     // If the API's total is larger than input + output + thinking, show the difference,
