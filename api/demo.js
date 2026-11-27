@@ -29,6 +29,11 @@ const MODELS = {
 // Vercel AI Gateway(OpenAI互換のChat Completions)
 const GATEWAY_URL = 'https://ai-gateway.vercel.sh/v1/chat/completions';
 
+// Gateway 経由のモデルを動かす業者(プロバイダー)の固定。
+// ここに書いた業者にだけ送る。ほかの業者へは、切り替わらない(障害のときは、エラーになる)。
+// 量子化(FP8など)が業者で違うので、測定の条件をそろえるために固定している。
+const GATEWAY_PROVIDERS_ONLY = ['parasail'];
+
 // Gateway 経由のモデルに許す出力の長さ(思考トークンも含まれる場合がある)
 const GATEWAY_MAX_TOKENS = 16384;
 
@@ -573,7 +578,13 @@ async function callGateway({ systemText, contents, modelId }) {
     body: JSON.stringify({
       model: modelId,
       messages: toChatMessages(systemText, contents),
-      max_tokens: GATEWAY_MAX_TOKENS
+      max_tokens: GATEWAY_MAX_TOKENS,
+      // 業者の固定: GATEWAY_PROVIDERS_ONLY に書いた業者にだけ送る
+      providerOptions: {
+        gateway: {
+          only: GATEWAY_PROVIDERS_ONLY
+        }
+      }
     })
   });
 
