@@ -73,6 +73,12 @@ const EASY_ADDENDUM_FILE = '../prompts/masato-easy-addendum.txt';
 // このファイルがなければ、何も足さない(置かなくても、エラーにはならない)。
 const SHARP_ADDENDUM_FILE = '../prompts/masato-sharp-addendum.txt';
 
+// Gemma 4(Gateway経由のモデル)専用の追加の文章。
+// Gateway経由のモデルでOSありの列を動かすときは、Easy・Sharp の追加文は使わず、このファイルだけを足す。
+// このファイルがなければ、またはファイルが空なら、何も足さない(追加なし)。
+// 中身を Sharp や Easy の追加文と同じにすれば、その版になる。自由に書き換えて試せる。
+const GEMMA_ADDENDUM_FILE = '../prompts/masato-gemma-addendum.txt';
+
 function readPrompt(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
@@ -766,7 +772,15 @@ export default async function handler(req, res) {
 
       modeFile = 'masato-dual-mode.txt';
 
-      if (mode === 'easy') {
+      if (modelConfig.provider === 'gateway') {
+        // Gemma 4 専用: Easy・Sharp の追加文は使わず、Gemma専用のファイルだけを足す(なければ追加なし)
+        const gemmaExtra = readOptionalPrompt(GEMMA_ADDENDUM_FILE);
+
+        if (gemmaExtra.trim()) {
+          dualModePrompt += '\n\n' + gemmaExtra;
+          modeFile += ' + masato-gemma-addendum.txt';
+        }
+      } else if (mode === 'easy') {
         dualModePrompt += '\n\n' + readPrompt(EASY_ADDENDUM_FILE);
         modeFile += ' + masato-easy-addendum.txt';
       } else {
