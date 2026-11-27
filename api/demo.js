@@ -6,6 +6,10 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 // 合言葉(DEMO_ACCESS_CODE)を確認して、1回の質問に1回だけ答える。
 // Supabase(自分用のデータ)には、一切つながらない。
 // 自分用の画面で使っているプロンプトのファイルを、そのまま読み込む。
+//
+// モデルの呼び出し先は2つ:
+//   gemini  : Google の API に直接(キー: GEMINI_API_KEY)
+//   gateway : Vercel AI Gateway(OpenAI互換。キー: AI_GATEWAY_API_KEY)。Gemma 4 はこちら。
 // =====================================================
 
 // ----- デモの固定設定(ここを変えると、デモ全体が変わる)-----
@@ -13,11 +17,24 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 const DEFAULT_MODEL_ID = 'gemini-3.8-flash';
 const DEFAULT_THINKING_LEVEL = 'low';
 
-// 画面から選べるモデルと、そのモデルで使える思考レベル(許可リスト)
-const MODEL_OPTIONS = {
-  'gemini-3.8-flash': ['low', 'medium'],
-  'gemini-4-carbon': ['low', 'medium']
+// 画面から選べるモデル(許可リスト)
+//   provider : 'gemini' か 'gateway'
+//   thinking : そのモデルで選べる思考レベル。null は、思考レベルを指定できないモデル(画面からの指定は無視する)
+const MODELS = {
+  'gemini-3.8-flash': { provider: 'gemini', thinking: ['low', 'medium'] },
+  'gemini-4-carbon': { provider: 'gemini', thinking: ['low', 'medium'] },
+  'google/gemma-4-31b-it': { provider: 'gateway', thinking: null }
 };
+
+// Vercel AI Gateway(OpenAI互換のChat Completions)
+const GATEWAY_URL = 'https://ai-gateway.vercel.sh/v1/chat/completions';
+
+// Gateway 経由のモデルに許す出力の長さ(思考トークンも含まれる場合がある)
+const GATEWAY_MAX_TOKENS = 16384;
+
+// デモの時間の上限。VercelのHobbyは1回の呼び出しが300秒で切れるので、
+// その前(280秒)に、こちらで「上限内に返らなかった」と返す。
+const MODEL_TIMEOUT_MS = 280000;
 
 const MAX_MESSAGE_LENGTH = 4000;
 
@@ -431,7 +448,47 @@ function tidyAnswer(text, isJapanese) {
 }
 // ===== 画面用の整形 終了 =====
 
-// ----- Gemini の呼び出し -----
+// ----- 通信の共通部分 -----
+// 時間の上限(MODEL_TIMEOUT_MS)を超えたら、code が 'DEMO_TIMEOUT' のエラーを投げる。
+async function fetchJson(url, options) {
+  const startedAt = performance.now();
+  let response;
+  let raw;
+
+  try {
+    response = await fetch(url, {
+      ...options,
+      signal: AbortSignal.timeout(MODEL_TIMEOUT_MS)
+    });
+    raw = await response.text();
+  } catch (error) {
+    if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+      throw Object.assign(new Error('timeout'), { code: 'DEMO_TIMEOUT' });
+    }
+
+    throw error;
+  }
+
+  const elapsedMs = Math.round(performance.now() - startedAt);
+  let data = null;
+
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    throw new Error('The model API returned an unreadable response.');
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error?.message ||
+        `The model API returned an error (${response.status}).`
+    );
+  }
+
+  return { data, elapsedMs };
+}
+
+// ----- Gemini の呼び出し(Google の API に直接) -----
 async function callGemini({ systemText, contents, modelId, thinkingLevel }) {
   const body = {
     contents,
@@ -446,9 +503,7 @@ async function callGemini({ systemText, contents, modelId, thinkingLevel }) {
     body.systemInstruction = { parts: [{ text: systemText }] };
   }
 
-  const startedAt = performance.now();
-
-  const response = await fetch(
+  const { data, elapsedMs } = await fetchJson(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`,
     {
       method: 'POST',
@@ -460,20 +515,6 @@ async function callGemini({ systemText, contents, modelId, thinkingLevel }) {
     }
   );
 
-  const raw = await response.text();
-  const elapsedMs = Math.round(performance.now() - startedAt);
-  let data = null;
-
-  try {
-    data = raw ? JSON.parse(raw) : null;
-  } catch {
-    throw new Error('The model API returned an unreadable response.');
-  }
-
-  if (!response.ok) {
-    throw new Error(data?.error?.message || 'The model API returned an error.');
-  }
-
   const candidate = data?.candidates?.[0];
 
   if (!candidate?.content?.parts) {
@@ -481,26 +522,122 @@ async function callGemini({ systemText, contents, modelId, thinkingLevel }) {
   }
 
   return {
-    content: candidate.content,
+    text: getText(candidate.content),
     usage: data.usageMetadata || {},
     modelVersion: data.modelVersion || null,
     elapsedMs
   };
 }
 
-function summarizeCall(label, result) {
-  const number = value => (Number.isFinite(value) ? value : 0);
+// ----- Gateway の呼び出し(Vercel AI Gateway。OpenAI互換のChat Completions) -----
+// Gemini 形式の contents(role: user / model、parts: [{text}])を、chat の messages に直す。
+function toChatMessages(systemText, contents) {
+  const messages = [];
+
+  if (systemText) {
+    messages.push({ role: 'system', content: systemText });
+  }
+
+  for (const item of contents) {
+    messages.push({
+      role: item.role === 'model' ? 'assistant' : 'user',
+      content: (item.parts || []).map(part => part.text).join('\n')
+    });
+  }
+
+  return messages;
+}
+
+function textFromChatContent(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map(part => (typeof part === 'string' ? part : part?.text || ''))
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  return '';
+}
+
+async function callGateway({ systemText, contents, modelId }) {
+  const { data, elapsedMs } = await fetchJson(GATEWAY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.AI_GATEWAY_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: modelId,
+      messages: toChatMessages(systemText, contents),
+      max_tokens: GATEWAY_MAX_TOKENS
+    })
+  });
+
+  const text = textFromChatContent(data?.choices?.[0]?.message?.content);
+
+  if (!text) {
+    throw new Error('The model returned no answer.');
+  }
+
+  return {
+    text,
+    usage: data.usage || {},
+    modelVersion: data.model || null,
+    elapsedMs
+  };
+}
+
+function callModel({ modelId, modelConfig, thinkingLevel, systemText, contents }) {
+  if (modelConfig.provider === 'gateway') {
+    return callGateway({ systemText, contents, modelId });
+  }
+
+  return callGemini({ systemText, contents, modelId, thinkingLevel });
+}
+
+const toNumber = value => (Number.isFinite(value) ? value : 0);
+
+function summarizeGeminiCall(label, result) {
   const usage = result.usage || {};
 
   return {
     call: label,
-    inputTokens: number(usage.promptTokenCount),
-    cachedInputTokens: number(usage.cachedContentTokenCount),
-    outputTokens: number(usage.candidatesTokenCount),
-    thinkingTokens: number(usage.thoughtsTokenCount),
-    totalTokens: number(usage.totalTokenCount),
+    inputTokens: toNumber(usage.promptTokenCount),
+    cachedInputTokens: toNumber(usage.cachedContentTokenCount),
+    outputTokens: toNumber(usage.candidatesTokenCount),
+    thinkingTokens: toNumber(usage.thoughtsTokenCount),
+    totalTokens: toNumber(usage.totalTokenCount),
     timeMs: result.elapsedMs
   };
+}
+
+// OpenAI互換の数え方では、completion_tokens に思考(reasoning)のトークンが含まれることが多い。
+// reasoning_tokens が報告されていれば、出力から引いて、思考として別に出す。
+// 合計と内訳が合わない場合は、画面の「内訳に出ていないトークン」の注記で分かる。
+function summarizeGatewayCall(label, result) {
+  const usage = result.usage || {};
+  const reasoning = toNumber(usage.completion_tokens_details?.reasoning_tokens);
+  const completion = toNumber(usage.completion_tokens);
+
+  return {
+    call: label,
+    inputTokens: toNumber(usage.prompt_tokens),
+    cachedInputTokens: toNumber(usage.prompt_tokens_details?.cached_tokens),
+    outputTokens: Math.max(0, completion - reasoning),
+    thinkingTokens: reasoning,
+    totalTokens: toNumber(usage.total_tokens),
+    timeMs: result.elapsedMs
+  };
+}
+
+function summarizeCall(modelConfig, label, result) {
+  return modelConfig.provider === 'gateway'
+    ? summarizeGatewayCall(label, result)
+    : summarizeGeminiCall(label, result);
 }
 
 function sumCalls(calls) {
@@ -530,7 +667,7 @@ export default async function handler(req, res) {
 
   const expectedCode = process.env.DEMO_ACCESS_CODE;
 
-  if (!expectedCode || !process.env.GEMINI_API_KEY) {
+  if (!expectedCode) {
     return res.status(500).json({ error: 'The demo is not configured yet.' });
   }
 
@@ -558,18 +695,34 @@ export default async function handler(req, res) {
   // 許可リストにない値は、黙って別の設定にせず、エラーにする(測定の取り違えを防ぐため)。
   const modelId = body.modelId == null ? DEFAULT_MODEL_ID : body.modelId;
 
-  if (!Object.hasOwn(MODEL_OPTIONS, modelId)) {
+  if (!Object.hasOwn(MODELS, modelId)) {
     return res.status(400).json({ error: 'This model is not available.' });
   }
 
-  const thinkingLevel = body.thinkingLevel == null
-    ? DEFAULT_THINKING_LEVEL
-    : String(body.thinkingLevel).toLowerCase();
+  const modelConfig = MODELS[modelId];
 
-  if (!MODEL_OPTIONS[modelId].includes(thinkingLevel)) {
-    return res.status(400).json({
-      error: 'This thinking level is not available for the model.'
-    });
+  // 思考レベルを指定できないモデル(Gemma 4)では、画面からの指定は無視する
+  let thinkingLevel = null;
+
+  if (modelConfig.thinking) {
+    thinkingLevel = body.thinkingLevel == null
+      ? DEFAULT_THINKING_LEVEL
+      : String(body.thinkingLevel).toLowerCase();
+
+    if (!modelConfig.thinking.includes(thinkingLevel)) {
+      return res.status(400).json({
+        error: 'This thinking level is not available for the model.'
+      });
+    }
+  }
+
+  // 使う呼び出し先のキーがあるか
+  const apiKey = modelConfig.provider === 'gateway'
+    ? process.env.AI_GATEWAY_API_KEY
+    : process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({ error: 'The demo is not configured yet.' });
   }
 
   // 画面から届くモード: 'none'(OSなし) / 'easy' / 'sharp'
@@ -625,26 +778,28 @@ export default async function handler(req, res) {
       // AIの返事は、毎回もらい直さず、固定の返事を入れる(呼び出しを1回にするため)
       const setupReply = { role: 'model', parts: [{ text: SETUP_REPLY }] };
 
-      answer = await callGemini({
+      answer = await callModel({
+        modelId,
+        modelConfig,
+        thinkingLevel,
         systemText,
-        contents: [initialMessage, setupReply, osUserMessage],
-        modelId,
-        thinkingLevel
+        contents: [initialMessage, setupReply, osUserMessage]
       });
 
-      calls.push(summarizeCall('answer', answer));
+      calls.push(summarizeCall(modelConfig, 'answer', answer));
     } else {
-      answer = await callGemini({
-        systemText: null,
-        contents: [userMessage],
+      answer = await callModel({
         modelId,
-        thinkingLevel
+        modelConfig,
+        thinkingLevel,
+        systemText: null,
+        contents: [userMessage]
       });
 
-      calls.push(summarizeCall('answer', answer));
+      calls.push(summarizeCall(modelConfig, 'answer', answer));
     }
 
-    const rawText = getText(answer.content);
+    const rawText = answer.text;
     const reply = useOS && HIDE_LABELS
       ? tidyAnswer(rawText, JAPANESE_RE.test(message))
       : rawText;
@@ -655,7 +810,7 @@ export default async function handler(req, res) {
       metrics: {
         model: modelId,
         modelVersion: answer.modelVersion,
-        thinkingLevel: thinkingLevel.toUpperCase(),
+        thinkingLevel: thinkingLevel ? thinkingLevel.toUpperCase() : 'DEFAULT',
         calls,
         totals: sumCalls(calls),
         systemInstructionAddendum: useOS ? LANGUAGE_RULE : null,
@@ -665,6 +820,16 @@ export default async function handler(req, res) {
   } catch (error) {
     // 質問や回答の中身は記録しない
     console.error('Demo API Error:', error.message);
+
+    // デモの時間の上限を超えたとき。モデルの良し悪しの判定ではない。
+    if (error.code === 'DEMO_TIMEOUT') {
+      return res.status(504).json({
+        error:
+          'The model did not return an answer within this demo\'s time limit ' +
+          `(${Math.round(MODEL_TIMEOUT_MS / 1000)} seconds). ` +
+          'This is a limit of the demo, not a verdict on the model.'
+      });
+    }
 
     // 指示のファイルが見つからないとき(Easy用のファイルを置き忘れた場合など)
     if (error.code === 'ENOENT') {
