@@ -7,24 +7,53 @@ function getSupabaseConfig() {
   };
 }
 
+// provider: 'gemini' は Google の API に直接(GEMINI_API_KEY)、
+//           'gateway' は Vercel AI Gateway(AI_GATEWAY_API_KEY)。
+// thinkingLevels が空のモデルは、思考レベルを指定できない(画面からの指定は無視する)。
 const MODEL_OPTIONS = [
   {
     id: 'gemini-3.8-flash',
     label: 'Gemini 3.8 Flash',
+    provider: 'gemini',
     thinkingLevels: ['LOW', 'MEDIUM', 'HIGH']
   },
   {
     id: 'gemini-3.1-flash-lite',
     label: 'Gemini 3.1 Flash-Lite',
+    provider: 'gemini',
     thinkingLevels: ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH']
+  },
+  {
+    id: 'google/gemma-4-31b-it',
+    label: 'Gemma 4 31B (Parasail)',
+    provider: 'gateway',
+    thinkingLevels: []
   }
 ];
 
 const DEFAULT_MODEL_ID = 'gemini-3.8-flash';
 const DEFAULT_THINKING_LEVEL = 'LOW';
 
+// Vercel AI Gateway(OpenAI互換のChat Completions)。デモ(api/demo.js)と同じ設定。
+const GATEWAY_URL = 'https://ai-gateway.vercel.sh/v1/chat/completions';
+
+// Gateway 経由のモデルを動かす業者の固定。ここに書いた業者にだけ送る。
+const GATEWAY_PROVIDERS_ONLY = ['parasail'];
+
+// Gateway 経由のモデルに許す出力の長さ(思考トークンも含まれる場合がある)
+const GATEWAY_MAX_TOKENS = 16384;
+
+// Vercel Hobby は1回の呼び出しが300秒で切れるので、その前にこちらで打ち切る。
+const GATEWAY_TIMEOUT_MS = 280000;
+
+// Gemma 4(Gateway経由のモデル)専用の追加の文章。
+// 新しい会話の最初に隠しメッセージとして送る追加プロトコルの末尾に足す。
+// ファイルがなければ、または空なら、何も足さない。
+const GEMMA_ADDENDUM_FILE = '../prompts/masato-gemma-addendum.txt';
+
 // Google Gemini APIの有料ティア料金(USD / 100万トークン)。
 // Gemini 3.8 Flashは2027-01-01から料金が変わるため、回答時点の料金を保存する。
+// Gemma 4(Gateway経由)は料金を決めていないので null(費用は「—」と表示される)。
 function getModelPricing(modelId, date = new Date()) {
   if (modelId === 'gemini-3.1-flash-lite') {
     return { input: 0.25, output: 1.50 };
@@ -148,6 +177,15 @@ function getModelSettings(modelId, thinkingLevel) {
     MODEL_OPTIONS.find(model => model.id === modelId) ||
     MODEL_OPTIONS.find(model => model.id === DEFAULT_MODEL_ID);
 
+  // 思考レベルを指定できないモデル(Gemma 4)では、画面からの指定は無視する
+  if (selectedModel.thinkingLevels.length === 0) {
+    return {
+      modelId: selectedModel.id,
+      provider: selectedModel.provider,
+      thinkingLevel: null
+    };
+  }
+
   const requestedLevel = String(
     thinkingLevel || DEFAULT_THINKING_LEVEL
   ).toUpperCase();
@@ -162,12 +200,26 @@ function getModelSettings(modelId, thinkingLevel) {
 
   return {
     modelId: selectedModel.id,
+    provider: selectedModel.provider,
     thinkingLevel: requestedLevel
   };
 }
 
 function readPrompt(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
+}
+
+// ファイルがなければ、空の文字列を返す(あってもなくてもよいファイル用)
+function readOptionalPrompt(path) {
+  try {
+    return readPrompt(path);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return '';
+    }
+
+    throw error;
+  }
 }
 
 function getText(content) {
@@ -777,6 +829,40 @@ async function renameConversation(id, userId, title, url, key, token) {
   return rows[0];
 }
 
+// ----- Gateway 用の変換 -----
+// Gemini 形式の contents(role: user / model、parts: [{text}])を、chat の messages に直す。
+function toChatMessages(systemText, contents) {
+  const messages = [];
+
+  if (systemText) {
+    messages.push({ role: 'system', content: systemText });
+  }
+
+  for (const item of contents) {
+    messages.push({
+      role: item.role === 'model' ? 'assistant' : 'user',
+      content: (item.parts || []).map(part => part.text).join('\n')
+    });
+  }
+
+  return messages;
+}
+
+function textFromChatContent(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map(part => (typeof part === 'string' ? part : part?.text || ''))
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  return '';
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({
@@ -918,7 +1004,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Geminiとの会話
+    // AIとの会話(Gemini または Gateway 経由のモデル)
     if (action === 'chat') {
       const message = body.message;
 
@@ -928,17 +1014,24 @@ export default async function handler(req, res) {
         });
       }
 
-      if (!process.env.GEMINI_API_KEY) {
+      // ブラウザから届いたモデル名・思考設定を許可リストで検証
+      const { modelId, thinkingLevel, provider } = getModelSettings(
+        body.modelId,
+        body.thinkingLevel
+      );
+
+      // 使う呼び出し先のキーがあるか
+      if (provider === 'gateway') {
+        if (!process.env.AI_GATEWAY_API_KEY) {
+          return res.status(500).json({
+            error: 'AI Gateway API key is not configured.'
+          });
+        }
+      } else if (!process.env.GEMINI_API_KEY) {
         return res.status(500).json({
           error: 'Gemini API key is not configured.'
         });
       }
-
-      // ブラウザから届いたモデル名・思考設定を許可リストで検証
-      const { modelId, thinkingLevel } = getModelSettings(
-        body.modelId,
-        body.thinkingLevel
-      );
 
       let conversation;
 
@@ -988,6 +1081,9 @@ export default async function handler(req, res) {
           { text: languageInstruction }
         ]
       };
+
+      // Gateway 用には、同じ内容を1つの system メッセージにまとめる
+      const systemText = corePrompt + '\n\n' + languageInstruction;
 
       async function askGemini(contents) {
         const apiUrl =
@@ -1042,24 +1138,126 @@ export default async function handler(req, res) {
         };
       }
 
+      // Vercel AI Gateway(OpenAI互換)。デモ(api/demo.js)と同じ呼び方。
+      // 戻り値は askGemini と同じ形(Gemini形式の content と usageMetadata)にそろえる。
+      // そのため、保存される履歴の形は変わらず、途中でモデルを切り替えても読める。
+      async function askGateway(contents) {
+        // アプリ独自の記録情報(appMetadata)は送らない(toChatMessages が role と parts だけを使う)
+        const startedAt = performance.now();
+        let data;
+        let response;
+
+        try {
+          response = await fetch(GATEWAY_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.AI_GATEWAY_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: modelId,
+              messages: toChatMessages(systemText, contents),
+              max_tokens: GATEWAY_MAX_TOKENS,
+              // 業者の固定: GATEWAY_PROVIDERS_ONLY に書いた業者にだけ送る
+              providerOptions: {
+                gateway: {
+                  only: GATEWAY_PROVIDERS_ONLY
+                }
+              }
+            }),
+            signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS)
+          });
+
+          data = await parseResponse(response);
+        } catch (error) {
+          if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+            const timeoutError = new Error(
+              `Gemma 4が${Math.round(GATEWAY_TIMEOUT_MS / 1000)}秒以内に返答しませんでした。`
+            );
+            timeoutError.status = 504;
+            throw timeoutError;
+          }
+
+          throw error;
+        }
+
+        const elapsedMs = Math.round(performance.now() - startedAt);
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error?.message ||
+            `AI Gatewayがエラーを返しました(${response.status})。`
+          );
+        }
+
+        const text = textFromChatContent(data?.choices?.[0]?.message?.content);
+
+        if (!text) {
+          throw new Error('モデルから有効な返答がありませんでした。');
+        }
+
+        // OpenAI互換の数え方では、completion_tokens に思考(reasoning)のトークンが含まれることが多い。
+        // reasoning_tokens が報告されていれば、出力から引いて、思考として別に数える。
+        const usage = data?.usage || {};
+        const reasoning = Number.isFinite(usage.completion_tokens_details?.reasoning_tokens)
+          ? usage.completion_tokens_details.reasoning_tokens
+          : 0;
+
+        const usageMetadata = {
+          promptTokenCount: Number.isFinite(usage.prompt_tokens)
+            ? usage.prompt_tokens
+            : undefined,
+          candidatesTokenCount: Number.isFinite(usage.completion_tokens)
+            ? Math.max(0, usage.completion_tokens - reasoning)
+            : undefined,
+          thoughtsTokenCount: reasoning,
+          totalTokenCount: Number.isFinite(usage.total_tokens)
+            ? usage.total_tokens
+            : undefined
+        };
+
+        return {
+          content: { role: 'model', parts: [{ text }] },
+          usageMetadata,
+          modelVersion: data?.model || null,
+          elapsedMs
+        };
+      }
+
+      function askModel(contents) {
+        return provider === 'gateway'
+          ? askGateway(contents)
+          : askGemini(contents);
+      }
+
       let history = Array.isArray(conversation.history)
         ? conversation.history
         : [];
 
       // 新しい会話の場合だけDual ModeとReferenceを初期化
       if (history.length === 0) {
-        const initialPrompt =
-          dualModePrompt + '\n\n' + referencePrompt;
+        let initialPrompt = dualModePrompt;
+
+        // Gemma 4 専用: Gemma用の追加文を足す(ファイルがなければ、追加なし)
+        if (provider === 'gateway') {
+          const gemmaExtra = readOptionalPrompt(GEMMA_ADDENDUM_FILE);
+
+          if (gemmaExtra.trim()) {
+            initialPrompt += '\n\n' + gemmaExtra;
+          }
+        }
+
+        initialPrompt += '\n\n' + referencePrompt;
 
         // hidden の印を付けて、画面には出さない
-        // (appMetadata は askGemini の中で取り除かれるので、Geminiへ届く内容は変わらない)
+        // (appMetadata は askGemini / askGateway の中で取り除かれるので、モデルへ届く内容は変わらない)
         const initialMessage = {
           role: 'user',
           parts: [{ text: initialPrompt }],
           appMetadata: { hidden: true }
         };
 
-        const initialResult = await askGemini([initialMessage]);
+        const initialResult = await askModel([initialMessage]);
         const initialReply = initialResult.content;
         initialReply.appMetadata = { hidden: true };
 
@@ -1074,7 +1272,7 @@ export default async function handler(req, res) {
         parts: [{ text: message }]
       });
 
-      const answerResult = await askGemini(history);
+      const answerResult = await askModel(history);
       const aiReply = answerResult.content;
 
       const usage = answerResult.usageMetadata || {};
@@ -1112,8 +1310,9 @@ export default async function handler(req, res) {
       aiReply.appMetadata = {
         elapsedMs: answerResult.elapsedMs,
         modelId,
+        provider,
         modelVersion: answerResult.modelVersion,
-        thinkingLevel,
+        thinkingLevel: thinkingLevel || 'DEFAULT',
         promptTokenCount,
         candidatesTokenCount: Number.isFinite(candidatesTokenCount)
           ? candidatesTokenCount
